@@ -79,19 +79,60 @@ const percentage = z
  * Route schemas
  * ---------------------------------------------------------------------- */
 
+/** POST /auth/register */
+export const registerSchema = z.object({
+  email: z.string().email('Invalid email address').max(255).transform((s) => s.trim().toLowerCase()),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password too long')
+    .regex(/[^a-zA-Z0-9]/, 'Password must contain at least one special character'),
+  display_name: z.string().min(1).max(100).transform((s) => s.trim()).optional(),
+  /** Honeypot field — must be absent or empty; bots typically fill it */
+  _hp: z.string().max(0, 'Unexpected value').optional().default(''),
+});
+
 /** POST /auth/login */
 export const loginSchema = z.object({
-  licence_plate: z
-    .string()
-    .min(1, 'Licence plate is required')
-    .max(30, 'Licence plate too long')
-    .transform((s) => s.replace(/\s+/g, '').toUpperCase()),
+  email: z.string().email('Invalid email address').max(255).transform((s) => s.trim().toLowerCase()),
   password: z
     .string()
     .min(8, 'Password must be at least 8 characters')
     .max(128, 'Password too long'),
   /** Honeypot field — must be absent or empty; bots typically fill it */
   _hp: z.string().max(0, 'Unexpected value').optional().default(''),
+});
+
+/** POST /auth/magic-link/request */
+export const magicLinkRequestSchema = z.object({
+  email: z.string().email('Invalid email address').max(255).transform((s) => s.trim().toLowerCase()),
+  _hp: z.string().max(0, 'Unexpected value').optional().default(''),
+});
+
+/** POST /auth/magic-link/verify */
+export const magicLinkVerifySchema = z.object({
+  token: z.string().min(1).max(128),
+});
+
+/** POST /auth/change-password */
+export const changePasswordSchema = z.object({
+  current_password: z.string().min(1).max(128),
+  new_password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password too long')
+    .regex(/[^a-zA-Z0-9]/, 'Password must contain at least one special character'),
+});
+
+/** POST /auth/2fa/disable — just needs password confirmation */
+export const confirmPasswordSchema = z.object({
+  password: z.string().min(1).max(128),
+});
+
+/** POST /auth/2fa/verify-login */
+export const verify2faLoginSchema = z.object({
+  temp_token: z.string().min(1).max(512),
+  code: z.string().min(1).max(20),
 });
 
 /** POST /sessions */
@@ -146,16 +187,12 @@ export const tariffUpdateSchema = tariffSchema.partial();
 
 /** POST /admin/users */
 export const createUserSchema = z.object({
-  licence_plate: z
-    .string()
-    .min(1, 'Licence plate is required')
-    .max(30, 'Licence plate too long')
-    .transform((s) => s.replace(/\s+/g, '').toUpperCase()),
+  email: z.string().email('Invalid email address').max(255).transform((s) => s.trim().toLowerCase()),
   password: z
     .string()
     .min(8, 'Password must be at least 8 characters')
     .max(128, 'Password too long'),
-  email: z.string().email('Invalid email address').max(255).nullable().optional(),
+  display_name: z.string().max(100).optional(),
   is_admin: z.boolean().optional().default(false),
 });
 
@@ -189,3 +226,16 @@ export const analyticsQuerySchema = z.object({
   startDate: isoDate.optional(),
   endDate: isoDate.optional(),
 });
+
+/** POST /vehicles */
+export const createVehicleSchema = z.object({
+  licence_plate: z
+    .string()
+    .min(1, 'Licence plate is required')
+    .max(30, 'Licence plate too long')
+    .transform((s) => s.replace(/\s+/g, '').toUpperCase()),
+  nickname: z.string().max(100).transform((s) => s.trim()).optional(),
+});
+
+/** PUT /vehicles/:id */
+export const updateVehicleSchema = createVehicleSchema.partial();

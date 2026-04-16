@@ -1,17 +1,13 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
 import db, { getSetting, setSetting } from '../db/database';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import {
   validate,
   createUserSchema,
   smtpSettingsSchema,
-  setup2faSchema,
-  verify2faSchema,
 } from '../middleware/validate';
 import { AuthenticatedRequest, User, AppSetting } from '../types';
-import { sendMail } from '../utils/mailer';
 
 const router = Router();
 router.use(authenticate, requireAdmin);
@@ -20,8 +16,8 @@ router.use(authenticate, requireAdmin);
 router.get('/users', (_req: Request, res: Response): void => {
   try {
     const users = db
-      .prepare(`SELECT id, licence_plate, is_admin, email, created_at FROM users ORDER BY created_at ASC`)
-      .all() as Omit<User, 'password_hash'>[];
+      .prepare(`SELECT id, email, display_name, is_admin, created_at FROM users ORDER BY created_at ASC`)
+      .all() as Omit<User, 'password_hash' | 'licence_plate' | 'failed_login_attempts' | 'locked_until'>[];
     res.json({ users });
   } catch (err) {
     console.error('[admin/users GET]', err);
@@ -32,32 +28,29 @@ router.get('/users', (_req: Request, res: Response): void => {
 // POST /admin/users
 router.post('/users', validate(createUserSchema), (req: Request, res: Response): void => {
   try {
-    // licence_plate is already normalised (uppercase + stripped) by Zod schema
-    const { licence_plate, password, email, is_admin } = req.body as {
-      licence_plate: string;
+    const { email, password, display_name, is_admin } = req.body as {
+      email: string;
       password: string;
-      email?: string | null;
+      display_name?: string;
       is_admin: boolean;
     };
 
-    const existing = db
-      .prepare(`SELECT id FROM users WHERE licence_plate = ?`)
-      .get(licence_plate);
+    const existing = db.prepare(`SELECT id FROM users WHERE email = ?`).get(email);
     if (existing) {
-      res.status(409).json({ error: 'User with this licence plate already exists' });
+      res.status(409).json({ error: 'User with this email already exists' });
       return;
     }
 
     const hash = bcrypt.hashSync(password, 12);
     const result = db
       .prepare(
-        `INSERT INTO users (licence_plate, password_hash, is_admin, email) VALUES (?, ?, ?, ?)`
+        `INSERT INTO users (email, password_hash, is_admin, display_name) VALUES (?, ?, ?, ?)`
       )
-      .run(licence_plate, hash, is_admin ? 1 : 0, email ?? null);
+      .run(email, hash, is_admin ? 1 : 0, display_name ?? null);
 
     const user = db
-      .prepare(`SELECT id, licence_plate, is_admin, email, created_at FROM users WHERE id = ?`)
-      .get(result.lastInsertRowid) as Omit<User, 'password_hash'>;
+      .prepare(`SELECT id, email, display_name, is_admin, created_at FROM users WHERE id = ?`)
+      .get(result.lastInsertRowid) as Omit<User, 'password_hash' | 'licence_plate' | 'failed_login_attempts' | 'locked_until'>;
 
     res.status(201).json({ user });
   } catch (err) {
@@ -119,76 +112,6 @@ router.put('/settings', validate(smtpSettingsSchema), (req: Request, res: Respon
     res.json({ message: 'Settings updated' });
   } catch (err) {
     console.error('[admin/settings PUT]', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// POST /admin/2fa/setup
-router.post('/2fa/setup', validate(setup2faSchema), async (req: Request, res: Response): Promise<void> => {
-  try {
-    const authReq = req as AuthenticatedRequest;
-    const { email } = req.body as { email: string };
-
-    // Generate a cryptographically-random 6-digit OTP
-    const code = String(crypto.randomInt(100_000, 1_000_000));
-
-    const existing = db
-      .prepare(`SELECT admin_id FROM admin_2fa WHERE admin_id = ?`)
-      .get(authReq.user!.userId);
-
-    if (existing) {
-      db.prepare(`UPDATE admin_2fa SET email = ?, enabled = 0, secret = ? WHERE admin_id = ?`)
-        .run(email, code, authReq.user!.userId);
-    } else {
-      db.prepare(`INSERT INTO admin_2fa (admin_id, email, enabled, secret) VALUES (?, ?, 0, ?)`)
-        .run(authReq.user!.userId, email, code);
-    }
-
-    db.prepare(`UPDATE users SET email = ? WHERE id = ?`).run(email, authReq.user!.userId);
-
-    // Redact email in logs: show only the domain part
-    const redacted = `****@${email.split('@')[1] ?? '?'}`;
-    console.log(`[admin/2fa/setup] Sending 2FA code to ${redacted}`);
-    try {
-      await sendMail({
-        to: email,
-        subject: 'Leccy – Your 2FA verification code',
-        text: `Your Leccy 2FA verification code is: ${code}\n\nThis code is valid for your current session only.`,
-      });
-    } catch (mailErr) {
-      console.error('[admin/2fa/setup] Failed to send 2FA email:', mailErr);
-      res.status(500).json({ error: 'Failed to send 2FA email. Check SMTP settings in Admin → Settings.' });
-      return;
-    }
-
-    res.json({ message: '2FA setup initiated. Verify to enable.' });
-  } catch (err) {
-    console.error('[admin/2fa/setup]', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// POST /admin/2fa/verify
-router.post('/2fa/verify', validate(verify2faSchema), (req: Request, res: Response): void => {
-  try {
-    const authReq = req as AuthenticatedRequest;
-    const { code } = req.body as { code: string };
-
-    const record = db
-      .prepare(`SELECT * FROM admin_2fa WHERE admin_id = ?`)
-      .get(authReq.user!.userId) as { admin_id: number; secret: string | null } | undefined;
-
-    if (!record || record.secret !== code) {
-      res.status(401).json({ error: 'Invalid code' });
-      return;
-    }
-
-    db.prepare(`UPDATE admin_2fa SET enabled = 1, secret = NULL WHERE admin_id = ?`)
-      .run(authReq.user!.userId);
-
-    res.json({ message: '2FA enabled successfully' });
-  } catch (err) {
-    console.error('[admin/2fa/verify]', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

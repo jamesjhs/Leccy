@@ -24,11 +24,43 @@ function initializeDatabase(): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      licence_plate TEXT NOT NULL UNIQUE,
+      licence_plate TEXT UNIQUE,
       password_hash TEXT NOT NULL,
       is_admin INTEGER NOT NULL DEFAULT 0,
       email TEXT,
+      display_name TEXT,
+      failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+      locked_until TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS vehicles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      licence_plate TEXT NOT NULL UNIQUE,
+      nickname TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS magic_link_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      used INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS user_2fa (
+      user_id INTEGER PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      otp_secret TEXT,
+      otp_expires_at TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS charging_sessions (
@@ -93,6 +125,9 @@ function initializeDatabase(): void {
     );
   `);
 
+  // Run column migrations for existing databases
+  runMigrations();
+
   // Seed APP_VERSION
   const version = process.env.APP_VERSION || '0.0.1';
   const upsertVersion = db.prepare(
@@ -105,11 +140,29 @@ function initializeDatabase(): void {
   const adminExists = db.prepare(`SELECT id FROM users WHERE licence_plate = 'ADMIN'`).get();
   if (!adminExists) {
     const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@123';
+    const adminEmail = process.env.ADMIN_EMAIL || null;
     const hash = bcrypt.hashSync(adminPassword, 12);
     db.prepare(
-      `INSERT INTO users (licence_plate, password_hash, is_admin, email) VALUES ('ADMIN', ?, 1, NULL)`
-    ).run(hash);
+      `INSERT INTO users (licence_plate, password_hash, is_admin, email) VALUES ('ADMIN', ?, 1, ?)`
+    ).run(hash, adminEmail);
     console.log('[DB] Admin user created.');
+  }
+}
+
+function runMigrations(): void {
+  // Add display_name column if missing
+  const userCols = (db.pragma('table_info(users)') as Array<{ name: string }>).map((c) => c.name);
+  if (!userCols.includes('display_name')) {
+    db.exec(`ALTER TABLE users ADD COLUMN display_name TEXT`);
+    console.log('[DB] Migration: added users.display_name');
+  }
+  if (!userCols.includes('failed_login_attempts')) {
+    db.exec(`ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER NOT NULL DEFAULT 0`);
+    console.log('[DB] Migration: added users.failed_login_attempts');
+  }
+  if (!userCols.includes('locked_until')) {
+    db.exec(`ALTER TABLE users ADD COLUMN locked_until TEXT`);
+    console.log('[DB] Migration: added users.locked_until');
   }
 }
 

@@ -21,6 +21,11 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
 
   try {
     const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    // Reject tokens that are still using the old licencePlate shape
+    if (!('email' in payload)) {
+      res.status(401).json({ error: 'Invalid or expired token' });
+      return;
+    }
     authReq.user = payload;
     next();
   } catch {

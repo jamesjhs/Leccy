@@ -2,11 +2,38 @@ import { Request } from 'express';
 
 export interface User {
   id: number;
-  licence_plate: string;
+  licence_plate: string | null;
   password_hash: string;
   is_admin: number; // 0 or 1
   email: string | null;
+  display_name: string | null;
+  failed_login_attempts: number;
+  locked_until: string | null;
   created_at: string;
+}
+
+export interface Vehicle {
+  id: number;
+  user_id: number;
+  licence_plate: string;
+  nickname: string | null;
+  created_at: string;
+}
+
+export interface MagicLinkToken {
+  id: number;
+  user_id: number;
+  token: string;
+  expires_at: string;
+  used: number;
+  created_at: string;
+}
+
+export interface User2FA {
+  user_id: number;
+  enabled: number;
+  otp_secret: string | null;
+  otp_expires_at: string | null;
 }
 
 export interface ChargingSession {
@@ -66,7 +93,7 @@ export interface Admin2FA {
 
 export interface JwtPayload {
   userId: number;
-  licencePlate: string;
+  email: string | null;
   isAdmin: boolean;
 }
 

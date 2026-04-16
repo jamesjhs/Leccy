@@ -4,6 +4,8 @@ import { useAuth } from './hooks/useAuth';
 import Layout from './components/Layout';
 import CookieNotice from './components/CookieNotice';
 import Login from './pages/Login';
+import Register from './pages/Register';
+import AccountSettings from './pages/AccountSettings';
 import Dashboard from './pages/Dashboard';
 import DataEntry from './pages/DataEntry';
 import ChargerCosts from './pages/ChargerCosts';
@@ -18,8 +20,11 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   isAdmin: boolean;
-  login: (licencePlate: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ requires_2fa?: boolean; temp_token?: string }>;
   logout: () => Promise<void>;
+  register: (email: string, password: string, display_name?: string) => Promise<void>;
+  verifyMagicLink: (token: string) => Promise<void>;
+  setAuth: (token: string, user: UserInfo) => void;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -47,12 +52,21 @@ export default function App() {
         <CookieNotice />
         <Routes>
           <Route path="/login" element={auth.user && !auth.isLoading ? <Navigate to="/dashboard" replace /> : <Login />} />
+          <Route path="/register" element={auth.user && !auth.isLoading ? <Navigate to="/dashboard" replace /> : <Register />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route
             path="/dashboard"
             element={
               <ProtectedRoute>
                 <Layout><Dashboard /></Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/account"
+            element={
+              <ProtectedRoute>
+                <Layout><AccountSettings /></Layout>
               </ProtectedRoute>
             }
           />

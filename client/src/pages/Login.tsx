@@ -24,11 +24,16 @@ export default function Login() {
 
   const licencePlateValue = watch('licence_plate', '');
 
+  // Normalise licence plate: strip spaces, convert to uppercase
+  function normalisePlate(value: string): string {
+    return value.replace(/\s+/g, '').toUpperCase();
+  }
+
   async function onSubmit(data: LoginForm) {
     setApiError(null);
     setIsSubmitting(true);
     try {
-      await login(data.licence_plate.toUpperCase(), data.password);
+      await login(normalisePlate(data.licence_plate), data.password);
       navigate('/dashboard');
     } catch (err: unknown) {
       const msg =
@@ -70,11 +75,8 @@ export default function Login() {
                 className="w-full border border-gray-300 rounded-lg px-4 py-2.5 uppercase tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
                 {...register('licence_plate', {
                   required: 'Licence plate is required',
-                  pattern: {
-                    value: /^[A-Z0-9 ]{2,10}$/i,
-                    message: 'Enter a valid licence plate',
-                  },
-                  onChange: (e) => setValue('licence_plate', (e.target.value as string).toUpperCase()),
+                  onChange: (e) =>
+                    setValue('licence_plate', (e.target.value as string).toUpperCase()),
                 })}
                 value={licencePlateValue.toUpperCase()}
               />

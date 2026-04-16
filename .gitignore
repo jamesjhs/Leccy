@@ -11,8 +11,20 @@
 *.sln.docstates
 *.env
 
-# User-specific files (MonoDevelop/Xamarin Studio)
-*.userprefs
+# PM2 logs
+logs/
+
+# SQLite database files
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Node / build artifacts
+node_modules/
+dist/
+client/dist/
+server/dist/
 
 # Mono auto generated files
 mono_crash.*

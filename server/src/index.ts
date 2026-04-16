@@ -15,7 +15,7 @@ import analyticsRoutes from './routes/analytics';
 import adminRoutes from './routes/admin';
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '3001', 10);
+const PORT = parseInt(process.env.PORT || '2030', 10);
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 // CORS

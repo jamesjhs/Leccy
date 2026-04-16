@@ -81,8 +81,10 @@ export default function Admin() {
     setUserError(null);
     setUserSuccess(null);
     try {
+      // Normalise: strip spaces and uppercase before sending
+      const normalisedPlate = data.licence_plate.replace(/\s+/g, '').toUpperCase();
       const payload: NewUser = {
-        licence_plate: data.licence_plate.toUpperCase(),
+        licence_plate: normalisedPlate,
         password: data.password,
         email: data.email || undefined,
         is_admin: data.is_admin,

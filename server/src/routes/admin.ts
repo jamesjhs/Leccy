@@ -35,9 +35,12 @@ router.post('/users', (req: Request, res: Response): void => {
       return;
     }
 
+    // Normalise: strip spaces and convert to uppercase before storing
+    const normalisedPlate = licence_plate.replace(/\s+/g, '').toUpperCase();
+
     const existing = db
       .prepare(`SELECT id FROM users WHERE licence_plate = ?`)
-      .get(licence_plate.toUpperCase());
+      .get(normalisedPlate);
     if (existing) {
       res.status(409).json({ error: 'User with this licence plate already exists' });
       return;
@@ -48,7 +51,7 @@ router.post('/users', (req: Request, res: Response): void => {
       .prepare(
         `INSERT INTO users (licence_plate, password_hash, is_admin, email) VALUES (?, ?, ?, ?)`
       )
-      .run(licence_plate.toUpperCase(), hash, is_admin ? 1 : 0, email ?? null);
+      .run(normalisedPlate, hash, is_admin ? 1 : 0, email ?? null);
 
     const user = db
       .prepare(`SELECT id, licence_plate, is_admin, email, created_at FROM users WHERE id = ?`)

@@ -28,9 +28,12 @@ router.post('/login', loginLimiter, (req: Request, res: Response): void => {
       return;
     }
 
+    // Normalise: strip spaces and convert to uppercase before lookup
+    const normalisedPlate = licence_plate.replace(/\s+/g, '').toUpperCase();
+
     const user = db
       .prepare(`SELECT * FROM users WHERE licence_plate = ?`)
-      .get(licence_plate.toUpperCase()) as User | undefined;
+      .get(normalisedPlate) as User | undefined;
 
     if (!user) {
       res.status(401).json({ error: 'Invalid credentials' });

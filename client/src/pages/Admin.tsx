@@ -193,6 +193,9 @@ export default function Admin() {
                 type="text"
                 className={`${inputClass} uppercase`}
                 placeholder="e.g. AB12 CDE"
+                maxLength={30}
+                spellCheck={false}
+                autoComplete="off"
                 {...registerUser('licence_plate', { required: 'Required' })}
               />
               {userErrors.licence_plate && <p className="text-red-500 text-xs mt-1">{userErrors.licence_plate.message}</p>}
@@ -203,6 +206,8 @@ export default function Admin() {
                 type="password"
                 className={inputClass}
                 placeholder="Min 8 chars, 1 special char"
+                maxLength={128}
+                autoComplete="new-password"
                 {...registerUser('password', {
                   required: 'Required',
                   minLength: { value: 8, message: 'Min 8 chars' },
@@ -213,7 +218,7 @@ export default function Admin() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">Email (optional)</label>
-              <input type="email" className={inputClass} {...registerUser('email')} />
+              <input type="email" className={inputClass} maxLength={255} autoComplete="email" {...registerUser('email')} />
             </div>
             <div className="flex items-center gap-2 mt-5">
               <input type="checkbox" id="is_admin" className="accent-green-600 w-4 h-4" {...registerUser('is_admin')} />

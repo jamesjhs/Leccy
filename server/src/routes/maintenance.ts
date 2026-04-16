@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import db from '../db/database';
 import { authenticate } from '../middleware/auth';
+import { validate, maintenanceSchema } from '../middleware/validate';
 import { AuthenticatedRequest, MaintenanceLog } from '../types';
 
 const router = Router();
@@ -21,7 +22,7 @@ router.get('/', (req: Request, res: Response): void => {
   }
 });
 
-router.post('/', (req: Request, res: Response): void => {
+router.post('/', validate(maintenanceSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
     const { description, log_date, cost_pence } = req.body as {
@@ -29,11 +30,6 @@ router.post('/', (req: Request, res: Response): void => {
       log_date: string;
       cost_pence?: number | null;
     };
-
-    if (!description || !log_date) {
-      res.status(400).json({ error: 'description and log_date are required' });
-      return;
-    }
 
     const result = db
       .prepare(
@@ -56,6 +52,11 @@ router.delete('/:id', (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
     const entryId = parseInt(req.params.id, 10);
+
+    if (!Number.isInteger(entryId) || entryId <= 0) {
+      res.status(400).json({ error: 'Invalid entry ID' });
+      return;
+    }
 
     const entry = db
       .prepare(`SELECT * FROM maintenance_log WHERE id = ?`)

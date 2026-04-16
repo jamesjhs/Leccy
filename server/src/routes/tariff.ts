@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import db from '../db/database';
 import { authenticate } from '../middleware/auth';
+import { validate, tariffSchema, tariffUpdateSchema } from '../middleware/validate';
 import { AuthenticatedRequest, TariffConfig } from '../types';
 
 const router = Router();
@@ -21,16 +22,11 @@ router.get('/', (req: Request, res: Response): void => {
   }
 });
 
-router.post('/', (req: Request, res: Response): void => {
+router.post('/', validate(tariffSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
     const { tariff_name, rate_pence_per_kwh, standing_charge_pence, effective_from } =
-      req.body as Partial<TariffConfig>;
-
-    if (!tariff_name || rate_pence_per_kwh === undefined || standing_charge_pence === undefined || !effective_from) {
-      res.status(400).json({ error: 'tariff_name, rate_pence_per_kwh, standing_charge_pence, and effective_from are required' });
-      return;
-    }
+      req.body as TariffConfig;
 
     const result = db
       .prepare(
@@ -50,10 +46,15 @@ router.post('/', (req: Request, res: Response): void => {
   }
 });
 
-router.put('/:id', (req: Request, res: Response): void => {
+router.put('/:id', validate(tariffUpdateSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
     const tariffId = parseInt(req.params.id, 10);
+
+    if (!Number.isInteger(tariffId) || tariffId <= 0) {
+      res.status(400).json({ error: 'Invalid tariff ID' });
+      return;
+    }
 
     const existing = db
       .prepare(`SELECT * FROM tariff_config WHERE id = ?`)
@@ -102,6 +103,11 @@ router.delete('/:id', (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
     const tariffId = parseInt(req.params.id, 10);
+
+    if (!Number.isInteger(tariffId) || tariffId <= 0) {
+      res.status(400).json({ error: 'Invalid tariff ID' });
+      return;
+    }
 
     const tariff = db
       .prepare(`SELECT * FROM tariff_config WHERE id = ?`)

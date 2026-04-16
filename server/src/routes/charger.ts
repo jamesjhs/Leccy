@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import db from '../db/database';
 import { authenticate } from '../middleware/auth';
+import { validate, chargerCostSchema } from '../middleware/validate';
 import { AuthenticatedRequest, ChargerCost } from '../types';
 
 const router = Router();
@@ -25,21 +26,11 @@ router.get('/', (req: Request, res: Response): void => {
   }
 });
 
-router.post('/', (req: Request, res: Response): void => {
+router.post('/', validate(chargerCostSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
     const { session_id, energy_kwh, price_pence, charger_type, charger_name } =
-      req.body as Partial<ChargerCost> & { session_id: number };
-
-    if (!session_id || energy_kwh === undefined || price_pence === undefined || !charger_type) {
-      res.status(400).json({ error: 'session_id, energy_kwh, price_pence, and charger_type are required' });
-      return;
-    }
-
-    if (!['home', 'public'].includes(charger_type)) {
-      res.status(400).json({ error: 'charger_type must be home or public' });
-      return;
-    }
+      req.body as ChargerCost & { session_id: number };
 
     // Verify session belongs to user
     const session = db
@@ -80,6 +71,11 @@ router.delete('/:id', (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
     const costId = parseInt(req.params.id, 10);
+
+    if (!Number.isInteger(costId) || costId <= 0) {
+      res.status(400).json({ error: 'Invalid cost ID' });
+      return;
+    }
 
     const cost = db
       .prepare(`SELECT * FROM charger_costs WHERE id = ?`)

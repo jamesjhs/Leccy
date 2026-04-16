@@ -122,8 +122,15 @@ export default function ChargerCosts() {
                 type="number"
                 step="0.001"
                 min="0"
+                max="200"
+                inputMode="decimal"
                 className={inputClass}
-                {...register('energy_kwh', { required: 'Required', min: { value: 0.001, message: 'Must be > 0' } })}
+                {...register('energy_kwh', {
+                  required: 'Required',
+                  min: { value: 0.001, message: 'Must be > 0' },
+                  max: { value: 200, message: 'Value exceeds expected maximum' },
+                  validate: (v) => isFinite(Number(v)) || 'Must be a valid number',
+                })}
               />
               {errors.energy_kwh && <p className="text-red-500 text-xs mt-1">{errors.energy_kwh.message}</p>}
             </div>
@@ -134,9 +141,16 @@ export default function ChargerCosts() {
                 type="number"
                 step="0.001"
                 min="0"
+                max="10000"
+                inputMode="decimal"
                 placeholder="0.000"
                 className={inputClass}
-                {...register('price_pounds', { required: 'Required', min: { value: 0, message: 'Must be ≥ 0' } })}
+                {...register('price_pounds', {
+                  required: 'Required',
+                  min: { value: 0, message: 'Must be ≥ 0' },
+                  max: { value: 10000, message: 'Value too large' },
+                  validate: (v) => isFinite(Number(v)) || 'Must be a valid number',
+                })}
               />
               {errors.price_pounds && <p className="text-red-500 text-xs mt-1">{errors.price_pounds.message}</p>}
             </div>
@@ -162,8 +176,11 @@ export default function ChargerCosts() {
               <input
                 type="text"
                 placeholder="e.g. Pod Point, Osprey"
+                maxLength={100}
                 className={inputClass}
-                {...register('charger_name')}
+                {...register('charger_name', {
+                  maxLength: { value: 100, message: 'Name too long (max 100 characters)' },
+                })}
               />
             </div>
           )}

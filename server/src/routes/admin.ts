@@ -2,6 +2,13 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import db, { getSetting, setSetting } from '../db/database';
 import { authenticate, requireAdmin } from '../middleware/auth';
+import {
+  validate,
+  createUserSchema,
+  smtpSettingsSchema,
+  setup2faSchema,
+  verify2faSchema,
+} from '../middleware/validate';
 import { AuthenticatedRequest, User, AppSetting } from '../types';
 
 const router = Router();
@@ -21,26 +28,19 @@ router.get('/users', (_req: Request, res: Response): void => {
 });
 
 // POST /admin/users
-router.post('/users', (req: Request, res: Response): void => {
+router.post('/users', validate(createUserSchema), (req: Request, res: Response): void => {
   try {
+    // licence_plate is already normalised (uppercase + stripped) by Zod schema
     const { licence_plate, password, email, is_admin } = req.body as {
       licence_plate: string;
       password: string;
-      email?: string;
-      is_admin?: boolean;
+      email?: string | null;
+      is_admin: boolean;
     };
-
-    if (!licence_plate || !password) {
-      res.status(400).json({ error: 'licence_plate and password are required' });
-      return;
-    }
-
-    // Normalise: strip spaces and convert to uppercase before storing
-    const normalisedPlate = licence_plate.replace(/\s+/g, '').toUpperCase();
 
     const existing = db
       .prepare(`SELECT id FROM users WHERE licence_plate = ?`)
-      .get(normalisedPlate);
+      .get(licence_plate);
     if (existing) {
       res.status(409).json({ error: 'User with this licence plate already exists' });
       return;
@@ -51,7 +51,7 @@ router.post('/users', (req: Request, res: Response): void => {
       .prepare(
         `INSERT INTO users (licence_plate, password_hash, is_admin, email) VALUES (?, ?, ?, ?)`
       )
-      .run(normalisedPlate, hash, is_admin ? 1 : 0, email ?? null);
+      .run(licence_plate, hash, is_admin ? 1 : 0, email ?? null);
 
     const user = db
       .prepare(`SELECT id, licence_plate, is_admin, email, created_at FROM users WHERE id = ?`)
@@ -69,6 +69,11 @@ router.delete('/users/:id', (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
     const targetId = parseInt(req.params.id, 10);
+
+    if (!Number.isInteger(targetId) || targetId <= 0) {
+      res.status(400).json({ error: 'Invalid user ID' });
+      return;
+    }
 
     if (targetId === authReq.user!.userId) {
       res.status(400).json({ error: 'Cannot delete your own account' });
@@ -102,17 +107,13 @@ router.get('/settings', (_req: Request, res: Response): void => {
   }
 });
 
-// PUT /admin/settings
-router.put('/settings', (req: Request, res: Response): void => {
+// PUT /admin/settings — only SMTP keys accepted (validated & stripped by Zod)
+router.put('/settings', validate(smtpSettingsSchema), (req: Request, res: Response): void => {
   try {
     const updates = req.body as Record<string, string>;
-    const forbidden = ['DB_ENCRYPTION_KEY', 'JWT_SECRET'];
-
     for (const [key, value] of Object.entries(updates)) {
-      if (forbidden.includes(key)) continue;
       setSetting(key, String(value));
     }
-
     res.json({ message: 'Settings updated' });
   } catch (err) {
     console.error('[admin/settings PUT]', err);
@@ -121,15 +122,10 @@ router.put('/settings', (req: Request, res: Response): void => {
 });
 
 // POST /admin/2fa/setup
-router.post('/2fa/setup', (req: Request, res: Response): void => {
+router.post('/2fa/setup', validate(setup2faSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
     const { email } = req.body as { email: string };
-
-    if (!email) {
-      res.status(400).json({ error: 'email is required' });
-      return;
-    }
 
     const existing = db
       .prepare(`SELECT admin_id FROM admin_2fa WHERE admin_id = ?`)
@@ -143,7 +139,6 @@ router.post('/2fa/setup', (req: Request, res: Response): void => {
         .run(authReq.user!.userId, email);
     }
 
-    // Update admin email in users table
     db.prepare(`UPDATE users SET email = ? WHERE id = ?`).run(email, authReq.user!.userId);
 
     res.json({ message: '2FA setup initiated. Verify to enable.' });
@@ -154,15 +149,10 @@ router.post('/2fa/setup', (req: Request, res: Response): void => {
 });
 
 // POST /admin/2fa/verify
-router.post('/2fa/verify', (req: Request, res: Response): void => {
+router.post('/2fa/verify', validate(verify2faSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
     const { code } = req.body as { code: string };
-
-    if (!code) {
-      res.status(400).json({ error: 'code is required' });
-      return;
-    }
 
     const record = db
       .prepare(`SELECT * FROM admin_2fa WHERE admin_id = ?`)

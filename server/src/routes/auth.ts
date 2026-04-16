@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import db, { getSetting } from '../db/database';
 import { authenticate } from '../middleware/auth';
+import { validate, loginSchema } from '../middleware/validate';
 import { AuthenticatedRequest, User } from '../types';
 
 const router = Router();
@@ -11,29 +12,40 @@ const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'change_this_jwt_secret_to_something_secure';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
-// Strict rate limit on login endpoint to prevent brute-force attacks
+// Stricter rate limit on login — 10 attempts per 15 minutes per IP
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
+  windowMs: 15 * 60 * 1000,
+  max: 10,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many login attempts. Please try again later.' },
 });
 
-router.post('/login', loginLimiter, (req: Request, res: Response): void => {
+// Small helper: non-blocking delay (used in bot/honeypot paths to waste time)
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+router.post('/login', loginLimiter, validate(loginSchema), async (req: Request, res: Response): Promise<void> => {
   try {
-    const { licence_plate, password } = req.body as { licence_plate: string; password: string };
-    if (!licence_plate || !password) {
-      res.status(400).json({ error: 'Licence plate and password are required' });
+    const { licence_plate, password, _hp } = req.body as {
+      licence_plate: string;
+      password: string;
+      _hp: string;
+    };
+
+    // ── Honeypot check ───────────────────────────────────────────────────────
+    // The _hp field is hidden and empty in the real form. Bots filling it in
+    // indicate automated submission. We delay and return a convincing 401 so
+    // bots cannot distinguish a honeypot rejection from a real auth failure.
+    if (_hp && _hp.length > 0) {
+      await sleep(2_000);
+      res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
 
-    // Normalise: strip spaces and convert to uppercase before lookup
-    const normalisedPlate = licence_plate.replace(/\s+/g, '').toUpperCase();
-
+    // licence_plate is already normalised (stripped + uppercased) by Zod schema
     const user = db
       .prepare(`SELECT * FROM users WHERE licence_plate = ?`)
-      .get(normalisedPlate) as User | undefined;
+      .get(licence_plate) as User | undefined;
 
     if (!user) {
       res.status(401).json({ error: 'Invalid credentials' });

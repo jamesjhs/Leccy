@@ -88,8 +88,15 @@ export default function DataEntry() {
                 type="number"
                 step="0.1"
                 min="0"
+                max="999999"
+                inputMode="decimal"
                 className={inputClass}
-                {...register('odometer_miles', { required: 'Required', min: { value: 0, message: 'Must be ≥ 0' } })}
+                {...register('odometer_miles', {
+                  required: 'Required',
+                  min: { value: 0, message: 'Must be ≥ 0' },
+                  max: { value: 999999, message: 'Value too large' },
+                  validate: (v) => isFinite(Number(v)) || 'Must be a valid number',
+                })}
               />
             </FormField>
 
@@ -97,8 +104,16 @@ export default function DataEntry() {
               <input
                 type="number"
                 step="0.1"
+                min="-60"
+                max="60"
+                inputMode="decimal"
                 className={inputClass}
-                {...register('air_temp_celsius', { required: 'Required' })}
+                {...register('air_temp_celsius', {
+                  required: 'Required',
+                  min: { value: -60, message: 'Below expected range' },
+                  max: { value: 60, message: 'Above expected range' },
+                  validate: (v) => isFinite(Number(v)) || 'Must be a valid number',
+                })}
               />
             </FormField>
           </div>
@@ -127,8 +142,14 @@ export default function DataEntry() {
                 type="number"
                 step="0.1"
                 min="0"
+                max="1000"
+                inputMode="decimal"
                 className={inputClass}
-                {...register('initial_range_miles', { required: 'Required', min: 0 })}
+                {...register('initial_range_miles', {
+                  required: 'Required',
+                  min: { value: 0, message: 'Must be ≥ 0' },
+                  max: { value: 1000, message: 'Value too large' },
+                })}
               />
             </FormField>
           </div>
@@ -157,8 +178,14 @@ export default function DataEntry() {
                 type="number"
                 step="0.1"
                 min="0"
+                max="1000"
+                inputMode="decimal"
                 className={inputClass}
-                {...register('final_range_miles', { required: 'Required', min: 0 })}
+                {...register('final_range_miles', {
+                  required: 'Required',
+                  min: { value: 0, message: 'Must be ≥ 0' },
+                  max: { value: 1000, message: 'Value too large' },
+                })}
               />
             </FormField>
           </div>

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import db from '../db/database';
 import { authenticate } from '../middleware/auth';
+import { validate, sessionSchema } from '../middleware/validate';
 import { AuthenticatedRequest, ChargingSession } from '../types';
 
 const router = Router();
@@ -21,7 +22,7 @@ router.get('/', (req: Request, res: Response): void => {
   }
 });
 
-router.post('/', (req: Request, res: Response): void => {
+router.post('/', validate(sessionSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
     const {
@@ -32,25 +33,7 @@ router.post('/', (req: Request, res: Response): void => {
       final_range_miles,
       air_temp_celsius,
       date_unplugged,
-    } = req.body as Partial<ChargingSession>;
-
-    if (
-      odometer_miles === undefined ||
-      initial_battery_pct === undefined ||
-      initial_range_miles === undefined ||
-      final_battery_pct === undefined ||
-      final_range_miles === undefined ||
-      air_temp_celsius === undefined ||
-      !date_unplugged
-    ) {
-      res.status(400).json({ error: 'All fields are required' });
-      return;
-    }
-
-    if (initial_battery_pct < 0 || initial_battery_pct > 100 || final_battery_pct < 0 || final_battery_pct > 100) {
-      res.status(400).json({ error: 'Battery percentage must be between 0 and 100' });
-      return;
-    }
+    } = req.body as ChargingSession;
 
     const result = db
       .prepare(
@@ -84,6 +67,11 @@ router.delete('/:id', (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
     const sessionId = parseInt(req.params.id, 10);
+
+    if (!Number.isInteger(sessionId) || sessionId <= 0) {
+      res.status(400).json({ error: 'Invalid session ID' });
+      return;
+    }
 
     const session = db
       .prepare(`SELECT * FROM charging_sessions WHERE id = ?`)

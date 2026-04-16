@@ -89,8 +89,12 @@ export default function Maintenance() {
             <textarea
               rows={3}
               placeholder="e.g. Tyre rotation, cabin air filter replacement"
+              maxLength={2000}
               className={`${inputClass} resize-none`}
-              {...register('description', { required: 'Description is required' })}
+              {...register('description', {
+                required: 'Description is required',
+                maxLength: { value: 2000, message: 'Description too long (max 2000 characters)' },
+              })}
             />
             {errors.description && <p className="text-red-500 text-xs mt-1">{errors.description.message}</p>}
           </div>
@@ -114,9 +118,16 @@ export default function Maintenance() {
                 type="number"
                 step="0.01"
                 min="0"
+                max="100000"
+                inputMode="decimal"
                 placeholder="0.00"
                 className={inputClass}
-                {...register('cost_pounds')}
+                {...register('cost_pounds', {
+                  min: { value: 0, message: 'Must be ≥ 0' },
+                  max: { value: 100000, message: 'Value too large' },
+                  validate: (v) =>
+                    v === '' || v === undefined || isFinite(Number(v)) || 'Must be a valid number',
+                })}
               />
             </div>
           </div>

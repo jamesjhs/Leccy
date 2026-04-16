@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import db from '../db/database';
 import { authenticate } from '../middleware/auth';
+import { validateQuery, analyticsQuerySchema } from '../middleware/validate';
 import {
   AuthenticatedRequest,
   AnalyticsResult,
@@ -26,7 +27,7 @@ interface RawSession {
   energy_kwh: number | null;
 }
 
-router.get('/', (req: Request, res: Response): void => {
+router.get('/', validateQuery(analyticsQuerySchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
     const { startDate, endDate } = req.query as { startDate?: string; endDate?: string };

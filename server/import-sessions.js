@@ -138,15 +138,18 @@ function parseDate(raw) {
   let   yyyy = parts[2].trim();
 
   if (yyyy.length === 2) {
-    // Two-digit year: treat 00-99 as 2000-2099
-    yyyy = '20' + yyyy;
+    // Two-digit year pivot: 00–49 → 2000–2049, 50–99 → 1950–1999
+    const yy = parseInt(yyyy, 10);
+    yyyy = String(yy <= 49 ? 2000 + yy : 1900 + yy);
   }
 
   if (yyyy.length !== 4) return null;
 
-  // Basic calendar sanity
   const d = parseInt(dd, 10), m = parseInt(mm, 10), y = parseInt(yyyy, 10);
-  if (d < 1 || d > 31 || m < 1 || m > 12 || y < 2000 || y > 2100) return null;
+
+  // Validate that the date actually exists in the calendar
+  const dt = new Date(y, m - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
 
   return `${yyyy}-${mm}-${dd}`;
 }

@@ -12,8 +12,6 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     token = authHeader.slice(7);
-  } else if (req.cookies && req.cookies.token) {
-    token = req.cookies.token as string;
   }
 
   if (!token) {

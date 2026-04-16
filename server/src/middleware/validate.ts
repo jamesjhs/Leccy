@@ -195,6 +195,7 @@ const timeStr = z
 export const tariffSchema = z.object({
   tariff_name: str(100),
   rate_pence_per_kwh: nnReal(10_000),
+  standing_charge_pence: nnReal(10_000),
   peak_start_time: timeStr,
   off_peak_rate_pence_per_kwh: nnReal(10_000),
   off_peak_start_time: timeStr,

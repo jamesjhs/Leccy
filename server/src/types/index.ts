@@ -74,6 +74,7 @@ export interface TariffConfig {
   user_id: number;
   tariff_name: string;
   rate_pence_per_kwh: number;
+  standing_charge_pence: number;
   peak_start_time: string;
   off_peak_rate_pence_per_kwh: number;
   off_peak_start_time: string;

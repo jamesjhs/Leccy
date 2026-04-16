@@ -435,6 +435,7 @@ router.post('/2fa/setup', authenticate, validate(setup2faSchema), async (req: Re
       db.prepare(`UPDATE users SET email = ? WHERE id = ?`).run(email, user.id);
     }
 
+    // Redact email for log: show only domain part (email already validated by Zod schema)
     const redacted = `****@${email.split('@')[1] ?? '?'}`;
     console.log(`[auth/2fa/setup] Sending 2FA setup code to ${redacted}`);
 

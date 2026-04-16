@@ -3,7 +3,6 @@ dotenv.config();
 
 import express from 'express';
 import cors from 'cors';
-import cookieParser from 'cookie-parser';
 import path from 'path';
 import rateLimit from 'express-rate-limit';
 
@@ -28,7 +27,6 @@ app.use(
 );
 
 app.use(express.json());
-app.use(cookieParser());
 
 // Global API rate limiter: 300 requests per 15 minutes per IP
 const apiLimiter = rateLimit({
@@ -38,16 +36,15 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many requests. Please try again later.' },
 });
-app.use('/api/', apiLimiter);
 
-// API routes
-app.use('/api/auth', authRoutes);
-app.use('/api/sessions', sessionsRoutes);
-app.use('/api/charger', chargerRoutes);
-app.use('/api/maintenance', maintenanceRoutes);
-app.use('/api/tariff', tariffRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/admin', adminRoutes);
+// API routes — rate limiter applied inline so all handlers are covered
+app.use('/api/auth', apiLimiter, authRoutes);
+app.use('/api/sessions', apiLimiter, sessionsRoutes);
+app.use('/api/charger', apiLimiter, chargerRoutes);
+app.use('/api/maintenance', apiLimiter, maintenanceRoutes);
+app.use('/api/tariff', apiLimiter, tariffRoutes);
+app.use('/api/analytics', apiLimiter, analyticsRoutes);
+app.use('/api/admin', apiLimiter, adminRoutes);
 
 // Serve frontend in production
 if (IS_PROD) {

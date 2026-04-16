@@ -37,11 +37,11 @@ export default function PrivacyPolicy({ onClose }: PrivacyPolicyProps) {
           </section>
 
           <section>
-            <h3 className="font-semibold text-green-700 mb-1">Cookies</h3>
+            <h3 className="font-semibold text-green-700 mb-1">Authentication tokens</h3>
             <p>
-              An <code>httpOnly</code> session cookie may be set by the server for authentication
-              purposes. This cookie is not accessible to JavaScript and is used only for server-side
-              session management.
+              A JSON Web Token (JWT) is stored in your browser&apos;s <code>localStorage</code> to
+              keep you signed in. This token is sent as a Bearer token on each API request and is
+              automatically removed when you log out. No cookies are used for authentication.
             </p>
           </section>
 

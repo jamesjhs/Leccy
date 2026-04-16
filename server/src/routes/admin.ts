@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import db, { getSetting, setSetting } from '../db/database';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import {
@@ -10,6 +11,7 @@ import {
   verify2faSchema,
 } from '../middleware/validate';
 import { AuthenticatedRequest, User, AppSetting } from '../types';
+import { sendMail } from '../utils/mailer';
 
 const router = Router();
 router.use(authenticate, requireAdmin);
@@ -122,24 +124,42 @@ router.put('/settings', validate(smtpSettingsSchema), (req: Request, res: Respon
 });
 
 // POST /admin/2fa/setup
-router.post('/2fa/setup', validate(setup2faSchema), (req: Request, res: Response): void => {
+router.post('/2fa/setup', validate(setup2faSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const authReq = req as AuthenticatedRequest;
     const { email } = req.body as { email: string };
+
+    // Generate a cryptographically-random 6-digit OTP
+    const code = String(crypto.randomInt(100_000, 1_000_000));
 
     const existing = db
       .prepare(`SELECT admin_id FROM admin_2fa WHERE admin_id = ?`)
       .get(authReq.user!.userId);
 
     if (existing) {
-      db.prepare(`UPDATE admin_2fa SET email = ?, enabled = 0, secret = NULL WHERE admin_id = ?`)
-        .run(email, authReq.user!.userId);
+      db.prepare(`UPDATE admin_2fa SET email = ?, enabled = 0, secret = ? WHERE admin_id = ?`)
+        .run(email, code, authReq.user!.userId);
     } else {
-      db.prepare(`INSERT INTO admin_2fa (admin_id, email, enabled, secret) VALUES (?, ?, 0, NULL)`)
-        .run(authReq.user!.userId, email);
+      db.prepare(`INSERT INTO admin_2fa (admin_id, email, enabled, secret) VALUES (?, ?, 0, ?)`)
+        .run(authReq.user!.userId, email, code);
     }
 
     db.prepare(`UPDATE users SET email = ? WHERE id = ?`).run(email, authReq.user!.userId);
+
+    // Redact email in logs: show only the domain part
+    const redacted = `****@${email.split('@')[1] ?? '?'}`;
+    console.log(`[admin/2fa/setup] Sending 2FA code to ${redacted}`);
+    try {
+      await sendMail({
+        to: email,
+        subject: 'Leccy – Your 2FA verification code',
+        text: `Your Leccy 2FA verification code is: ${code}\n\nThis code is valid for your current session only.`,
+      });
+    } catch (mailErr) {
+      console.error('[admin/2fa/setup] Failed to send 2FA email:', mailErr);
+      res.status(500).json({ error: 'Failed to send 2FA email. Check SMTP settings in Admin → Settings.' });
+      return;
+    }
 
     res.json({ message: '2FA setup initiated. Verify to enable.' });
   } catch (err) {

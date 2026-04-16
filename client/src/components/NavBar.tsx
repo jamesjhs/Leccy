@@ -5,7 +5,6 @@ import { useAuthContext } from '../App';
 const navLinks = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/data-entry', label: 'Data Entry' },
-  { to: '/charger-costs', label: 'Charger Costs' },
   { to: '/maintenance', label: 'Maintenance' },
   { to: '/tariff', label: 'Tariff' },
   { to: '/analytics', label: 'Analytics' },

@@ -21,7 +21,7 @@ function useWidth(ref: React.RefObject<HTMLDivElement | null>): number {
 
 // ─── Y axis nice ticks ────────────────────────────────────────────────────────
 function yTicks(max: number, n = 5): number[] {
-  if (max <= 0) return Array.from({ length: n + 1 }, (_, i) => i);
+  if (max <= 0) return [0];
   const raw = max / n;
   const mag = Math.pow(10, Math.floor(Math.log10(raw)));
   const step = Math.ceil(raw / mag) * mag;

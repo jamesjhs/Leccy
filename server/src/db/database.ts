@@ -164,6 +164,21 @@ function runMigrations(): void {
     db.exec(`ALTER TABLE users ADD COLUMN locked_until TEXT`);
     console.log('[DB] Migration: added users.locked_until');
   }
+
+  // Tariff peak/off-peak time-of-day columns
+  const tariffCols = (db.pragma('table_info(tariff_config)') as Array<{ name: string }>).map((c) => c.name);
+  if (!tariffCols.includes('off_peak_rate_pence_per_kwh')) {
+    db.exec(`ALTER TABLE tariff_config ADD COLUMN off_peak_rate_pence_per_kwh REAL NOT NULL DEFAULT 0`);
+    console.log('[DB] Migration: added tariff_config.off_peak_rate_pence_per_kwh');
+  }
+  if (!tariffCols.includes('peak_start_time')) {
+    db.exec(`ALTER TABLE tariff_config ADD COLUMN peak_start_time TEXT NOT NULL DEFAULT '07:00'`);
+    console.log('[DB] Migration: added tariff_config.peak_start_time');
+  }
+  if (!tariffCols.includes('off_peak_start_time')) {
+    db.exec(`ALTER TABLE tariff_config ADD COLUMN off_peak_start_time TEXT NOT NULL DEFAULT '00:00'`);
+    console.log('[DB] Migration: added tariff_config.off_peak_start_time');
+  }
 }
 
 initializeDatabase();

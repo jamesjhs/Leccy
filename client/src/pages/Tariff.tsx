@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { tariffApi, TariffConfig, NewTariff } from '../utils/api';
 
+const TARIFF_DEFAULTS = {
+  effective_from: new Date().toISOString().split('T')[0],
+  peak_start_time: '07:00',
+  off_peak_start_time: '00:00',
+  off_peak_rate_pence_per_kwh: 0,
+} as const;
+
 export default function Tariff() {
   const [tariffs, setTariffs] = useState<TariffConfig[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
@@ -9,15 +16,13 @@ export default function Tariff() {
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  const today = new Date().toISOString().split('T')[0];
-
   const {
     register,
     handleSubmit,
     reset,
     setValue,
     formState: { errors },
-  } = useForm<NewTariff>({ defaultValues: { effective_from: today } });
+  } = useForm<NewTariff>({ defaultValues: TARIFF_DEFAULTS });
 
   async function load() {
     try {
@@ -36,7 +41,9 @@ export default function Tariff() {
       const payload: NewTariff = {
         tariff_name: data.tariff_name,
         rate_pence_per_kwh: Number(data.rate_pence_per_kwh),
-        standing_charge_pence: Number(data.standing_charge_pence),
+        peak_start_time: data.peak_start_time,
+        off_peak_rate_pence_per_kwh: Number(data.off_peak_rate_pence_per_kwh),
+        off_peak_start_time: data.off_peak_start_time,
         effective_from: data.effective_from,
       };
 
@@ -48,7 +55,7 @@ export default function Tariff() {
         await tariffApi.create(payload);
         setSuccess('Tariff saved!');
       }
-      reset({ effective_from: today });
+      reset(TARIFF_DEFAULTS);
       void load();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to save';
@@ -62,7 +69,9 @@ export default function Tariff() {
     setEditingId(t.id);
     setValue('tariff_name', t.tariff_name);
     setValue('rate_pence_per_kwh', t.rate_pence_per_kwh);
-    setValue('standing_charge_pence', t.standing_charge_pence);
+    setValue('peak_start_time', t.peak_start_time ?? TARIFF_DEFAULTS.peak_start_time);
+    setValue('off_peak_rate_pence_per_kwh', t.off_peak_rate_pence_per_kwh ?? TARIFF_DEFAULTS.off_peak_rate_pence_per_kwh);
+    setValue('off_peak_start_time', t.off_peak_start_time ?? TARIFF_DEFAULTS.off_peak_start_time);
     setValue('effective_from', t.effective_from);
     setSuccess(null);
     setApiError(null);
@@ -71,7 +80,7 @@ export default function Tariff() {
 
   function cancelEdit() {
     setEditingId(null);
-    reset({ effective_from: today });
+    reset(TARIFF_DEFAULTS);
   }
 
   async function deleteTariff(id: number) {
@@ -103,43 +112,17 @@ export default function Tariff() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">Tariff Name</label>
-            <input
-              type="text"
-              placeholder="e.g. Octopus Agile, British Gas EV"
-              className={inputClass}
-              {...register('tariff_name', { required: 'Name is required' })}
-            />
-            {errors.tariff_name && <p className="text-red-500 text-xs mt-1">{errors.tariff_name.message}</p>}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Rate (p/kWh)</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Tariff Name</label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="text"
+                placeholder="e.g. Octopus Agile"
                 className={inputClass}
-                {...register('rate_pence_per_kwh', { required: 'Required', min: { value: 0, message: 'Must be ≥ 0' } })}
+                {...register('tariff_name', { required: 'Name is required' })}
               />
-              {errors.rate_pence_per_kwh && <p className="text-red-500 text-xs mt-1">{errors.rate_pence_per_kwh.message}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Standing Charge (p/day)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                className={inputClass}
-                {...register('standing_charge_pence', { required: 'Required', min: { value: 0, message: 'Must be ≥ 0' } })}
-              />
-              {errors.standing_charge_pence && (
-                <p className="text-red-500 text-xs mt-1">{errors.standing_charge_pence.message}</p>
-              )}
+              {errors.tariff_name && <p className="text-red-500 text-xs mt-1">{errors.tariff_name.message}</p>}
             </div>
 
             <div>
@@ -153,18 +136,66 @@ export default function Tariff() {
             </div>
           </div>
 
+          {/* Peak rate */}
+          <fieldset className="border border-amber-200 rounded-lg p-4 bg-amber-50">
+            <legend className="text-sm font-bold text-amber-700 px-1">☀️ Peak Rate</legend>
+            <div className="grid grid-cols-2 gap-4 mt-2">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Rate (p/kWh)</label>
+                <input
+                  type="number" step="0.01" min="0"
+                  className={inputClass}
+                  {...register('rate_pence_per_kwh', { required: 'Required', min: { value: 0, message: 'Must be ≥ 0' } })}
+                />
+                {errors.rate_pence_per_kwh && <p className="text-red-500 text-xs mt-1">{errors.rate_pence_per_kwh.message}</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Starts at</label>
+                <input
+                  type="time"
+                  className={inputClass}
+                  {...register('peak_start_time', { required: 'Required' })}
+                />
+                {errors.peak_start_time && <p className="text-red-500 text-xs mt-1">{errors.peak_start_time.message}</p>}
+              </div>
+            </div>
+          </fieldset>
+
+          {/* Off-peak rate */}
+          <fieldset className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+            <legend className="text-sm font-bold text-blue-700 px-1">🌙 Off-Peak Rate</legend>
+            <div className="grid grid-cols-2 gap-4 mt-2">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Rate (p/kWh)</label>
+                <input
+                  type="number" step="0.01" min="0"
+                  className={inputClass}
+                  {...register('off_peak_rate_pence_per_kwh', { required: 'Required', min: { value: 0, message: 'Must be ≥ 0' } })}
+                />
+                {errors.off_peak_rate_pence_per_kwh && <p className="text-red-500 text-xs mt-1">{errors.off_peak_rate_pence_per_kwh.message}</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Starts at</label>
+                <input
+                  type="time"
+                  className={inputClass}
+                  {...register('off_peak_start_time', { required: 'Required' })}
+                />
+                {errors.off_peak_start_time && <p className="text-red-500 text-xs mt-1">{errors.off_peak_start_time.message}</p>}
+              </div>
+            </div>
+          </fieldset>
+
           <div className="flex gap-3">
             <button
-              type="submit"
-              disabled={submitting}
+              type="submit" disabled={submitting}
               className="bg-green-700 hover:bg-green-600 disabled:bg-green-400 text-white font-bold px-6 py-2.5 rounded-lg transition-colors text-sm"
             >
               {submitting ? 'Saving…' : editingId !== null ? 'Update Tariff' : 'Save Tariff'}
             </button>
             {editingId !== null && (
               <button
-                type="button"
-                onClick={cancelEdit}
+                type="button" onClick={cancelEdit}
                 className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-5 py-2.5 rounded-lg transition-colors text-sm"
               >
                 Cancel
@@ -184,8 +215,10 @@ export default function Tariff() {
               <thead>
                 <tr className="text-left text-green-700 border-b border-green-100">
                   <th className="pb-2 pr-3">Name</th>
-                  <th className="pb-2 pr-3">Rate (p/kWh)</th>
-                  <th className="pb-2 pr-3">Standing (p/day)</th>
+                  <th className="pb-2 pr-3">☀️ Peak (p/kWh)</th>
+                  <th className="pb-2 pr-3">Peak starts</th>
+                  <th className="pb-2 pr-3">🌙 Off-Peak (p/kWh)</th>
+                  <th className="pb-2 pr-3">Off-Peak starts</th>
                   <th className="pb-2 pr-3">Effective From</th>
                   <th className="pb-2"></th>
                 </tr>
@@ -195,7 +228,9 @@ export default function Tariff() {
                   <tr key={t.id} className={`border-b border-gray-50 hover:bg-green-50 ${editingId === t.id ? 'bg-green-50' : ''}`}>
                     <td className="py-2 pr-3 font-semibold">{t.tariff_name}</td>
                     <td className="py-2 pr-3 font-mono">{t.rate_pence_per_kwh}p</td>
-                    <td className="py-2 pr-3 font-mono">{t.standing_charge_pence}p</td>
+                    <td className="py-2 pr-3 text-gray-600">{t.peak_start_time ?? '—'}</td>
+                    <td className="py-2 pr-3 font-mono">{t.off_peak_rate_pence_per_kwh ?? 0}p</td>
+                    <td className="py-2 pr-3 text-gray-600">{t.off_peak_start_time ?? '—'}</td>
                     <td className="py-2 pr-3 text-gray-600">{t.effective_from}</td>
                     <td className="py-2 flex gap-2">
                       <button

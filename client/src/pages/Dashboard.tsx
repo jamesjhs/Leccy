@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthContext } from '../App';
-import { sessionsApi, tariffApi, analyticsApi, ChargingSession, TariffConfig } from '../utils/api';
+import { tariffApi, analyticsApi, TariffConfig } from '../utils/api';
 
 interface SummaryStats {
   total_cost_pence: number;
@@ -11,7 +11,6 @@ interface SummaryStats {
 
 export default function Dashboard() {
   const { user } = useAuthContext();
-  const [sessions, setSessions] = useState<ChargingSession[]>([]);
   const [tariffs, setTariffs] = useState<TariffConfig[]>([]);
   const [stats, setStats] = useState<SummaryStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -19,12 +18,10 @@ export default function Dashboard() {
   useEffect(() => {
     async function load() {
       try {
-        const [sessRes, tariffRes, analyticsRes] = await Promise.all([
-          sessionsApi.getAll(),
+        const [tariffRes, analyticsRes] = await Promise.all([
           tariffApi.getAll(),
           analyticsApi.get(),
         ]);
-        setSessions(sessRes.data.sessions);
         setTariffs(tariffRes.data.tariffs);
         setStats({
           total_cost_pence: analyticsRes.data.total_cost_pence,
@@ -40,9 +37,7 @@ export default function Dashboard() {
     void load();
   }, []);
 
-  const latestSession = sessions[0];
   const currentTariff = tariffs[0];
-  const recent5 = sessions.slice(0, 5);
 
   return (
     <div>
@@ -64,19 +59,19 @@ export default function Dashboard() {
               icon="💷"
             />
             <SummaryCard
-              label="Current Rate"
+              label="Peak Rate"
               value={currentTariff ? `${currentTariff.rate_pence_per_kwh}p/kWh` : 'N/A'}
-              icon="⚡"
+              icon="☀️"
             />
             <SummaryCard
-              label="Latest Odometer"
-              value={latestSession ? `${latestSession.odometer_miles.toLocaleString()} mi` : 'N/A'}
-              icon="🚗"
+              label="Off-Peak Rate"
+              value={currentTariff ? `${currentTariff.off_peak_rate_pence_per_kwh}p/kWh` : 'N/A'}
+              icon="🌙"
             />
           </div>
 
           {/* Quick links */}
-          <div className="flex gap-3 mb-8">
+          <div className="flex gap-3">
             <Link
               to="/data-entry"
               className="bg-green-700 hover:bg-green-600 text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors"
@@ -84,44 +79,11 @@ export default function Dashboard() {
               + Add Charging Session
             </Link>
             <Link
-              to="/charger-costs"
+              to="/analytics"
               className="bg-white hover:bg-green-50 border border-green-300 text-green-800 font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors"
             >
-              + Add Charger Cost
+              View Analytics
             </Link>
-          </div>
-
-          {/* Recent activity */}
-          <div className="bg-white rounded-xl shadow-sm border border-green-100 p-5">
-            <h2 className="text-lg font-bold text-green-900 mb-4">Recent Sessions</h2>
-            {recent5.length === 0 ? (
-              <p className="text-gray-400 text-sm">No sessions yet. Add your first charging session!</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-green-700 border-b border-green-100">
-                      <th className="pb-2 pr-4">Date</th>
-                      <th className="pb-2 pr-4">Odometer</th>
-                      <th className="pb-2 pr-4">Initial %</th>
-                      <th className="pb-2 pr-4">Final %</th>
-                      <th className="pb-2">Temp °C</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recent5.map((s) => (
-                      <tr key={s.id} className="border-b border-gray-50 hover:bg-green-50">
-                        <td className="py-2 pr-4 text-gray-600">{s.date_unplugged}</td>
-                        <td className="py-2 pr-4 font-mono">{s.odometer_miles.toLocaleString()} mi</td>
-                        <td className="py-2 pr-4">{s.initial_battery_pct}%</td>
-                        <td className="py-2 pr-4 text-green-700 font-semibold">{s.final_battery_pct}%</td>
-                        <td className="py-2">{s.air_temp_celsius}°C</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
         </>
       )}

@@ -99,6 +99,8 @@ export const sessionsApi = {
 export const chargerApi = {
   getAll: () => api.get<{ costs: ChargerCostWithDate[] }>('/charger'),
   create: (data: NewChargerCost) => api.post<{ cost: ChargerCost }>('/charger', data),
+  update: (id: number, data: Partial<NewChargerCost>) =>
+    api.put<{ cost: ChargerCost }>(`/charger/${id}`, data),
   delete: (id: number) => api.delete(`/charger/${id}`),
 };
 
@@ -230,7 +232,9 @@ export interface TariffConfig {
   user_id: number;
   tariff_name: string;
   rate_pence_per_kwh: number;
-  standing_charge_pence: number;
+  peak_start_time: string;
+  off_peak_rate_pence_per_kwh: number;
+  off_peak_start_time: string;
   effective_from: string;
   created_at: string;
 }
@@ -238,7 +242,9 @@ export interface TariffConfig {
 export interface NewTariff {
   tariff_name: string;
   rate_pence_per_kwh: number;
-  standing_charge_pence: number;
+  peak_start_time: string;
+  off_peak_rate_pence_per_kwh: number;
+  off_peak_start_time: string;
   effective_from: string;
 }
 

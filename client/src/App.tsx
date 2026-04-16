@@ -8,7 +8,6 @@ import Register from './pages/Register';
 import AccountSettings from './pages/AccountSettings';
 import Dashboard from './pages/Dashboard';
 import DataEntry from './pages/DataEntry';
-import ChargerCosts from './pages/ChargerCosts';
 import Maintenance from './pages/Maintenance';
 import Tariff from './pages/Tariff';
 import Analytics from './pages/Analytics';
@@ -78,14 +77,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/charger-costs"
-            element={
-              <ProtectedRoute>
-                <Layout><ChargerCosts /></Layout>
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/charger-costs" element={<Navigate to="/data-entry" replace />} />
           <Route
             path="/maintenance"
             element={

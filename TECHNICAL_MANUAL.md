@@ -7,7 +7,7 @@ Leccy is a full-stack TypeScript application composed of:
 - **Backend:** Node.js + Express REST API with better-sqlite3 (synchronous SQLite)
 - **Frontend:** React SPA with Vite, React Router v6, Tailwind CSS, Recharts
 - **Database:** SQLite3 (single file, stored at `DB_PATH`)
-- **Auth:** JWT (stored in localStorage on client + httpOnly cookie)
+- **Auth:** JWT Bearer token (stored in `localStorage` on client; sent via `Authorization: Bearer` header)
 
 ```
 ┌─────────────────────────────────────┐
@@ -117,7 +117,7 @@ Leccy is a full-stack TypeScript application composed of:
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | POST | `/login` | No | Login with licence_plate + password. Returns JWT. |
-| POST | `/logout` | No | Clear session cookie. |
+| POST | `/logout` | No | Client-side token removal; invalidates session. |
 | GET | `/me` | Yes | Return current user info. |
 | GET | `/version` | No | Return APP_VERSION. |
 
@@ -236,7 +236,7 @@ See `.env.example` for all variables. Key ones:
 3. **HTTPS:** Always run behind HTTPS in production (use Nginx + Certbot).
 4. **Database:** Store the `data/leccy.db` file outside the web root and back it up regularly.
 5. **CORS:** In production, CORS is disabled (`false`). The Express server serves the React app directly.
-6. **httpOnly Cookies:** The JWT is also set as an httpOnly cookie, preventing XSS access.
+6. **Bearer Token Auth:** JWT is stored in `localStorage` and sent as an `Authorization: Bearer` header. No cookies are used for authentication, making the API inherently CSRF-immune.
 7. **Foreign Keys:** SQLite foreign keys are enabled with `PRAGMA foreign_keys = ON`.
 8. **Password Hashing:** bcryptjs with saltRounds: 12.
 9. **Admin-only routes:** The `/api/admin/*` endpoints require both `authenticate` and `requireAdmin` middleware.

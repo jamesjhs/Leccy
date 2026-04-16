@@ -125,11 +125,14 @@ export default function Maintenance() {
 
       <div className="bg-white rounded-xl shadow-sm border border-green-100 p-6 mb-8">
         <h2 className="text-lg font-semibold text-green-800 mb-1">Add Entry</h2>
-        {selectedVehicleId !== null && (
-          <p className="text-xs text-gray-500 mb-4">
-            Logging for: <span className="font-semibold">{vehicleLabel(vehicles.find((v) => v.id === selectedVehicleId)!)}</span>
-          </p>
-        )}
+        {selectedVehicleId !== null && (() => {
+          const v = vehicles.find((veh) => veh.id === selectedVehicleId);
+          return v ? (
+            <p className="text-xs text-gray-500 mb-4">
+              Logging for: <span className="font-semibold">{vehicleLabel(v)}</span>
+            </p>
+          ) : null;
+        })()}
         {selectedVehicleId === null && vehicles.length > 0 && (
           <p className="text-xs text-gray-500 mb-4">Select a vehicle above to link this entry, or log without a vehicle.</p>
         )}

@@ -78,7 +78,7 @@ export default function Vehicles() {
         nickname: data.nickname || undefined,
         vehicle_type: data.vehicle_type || undefined,
         battery_kwh: data.battery_kwh !== '' && data.battery_kwh !== undefined
-          ? Number(data.battery_kwh)
+          ? (isFinite(Number(data.battery_kwh)) ? Number(data.battery_kwh) : null)
           : null,
       };
 

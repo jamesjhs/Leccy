@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import db from '../db/database';
 import { authenticate } from '../middleware/auth';
-import { validate, chargerCostSchema } from '../middleware/validate';
+import { validate, chargerCostSchema, chargerCostUpdateSchema } from '../middleware/validate';
 import { AuthenticatedRequest, ChargerCost } from '../types';
 
 const router = Router();
@@ -63,6 +63,51 @@ router.post('/', validate(chargerCostSchema), (req: Request, res: Response): voi
     res.status(201).json({ cost });
   } catch (err) {
     console.error('[charger/POST]', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put('/:id', validate(chargerCostUpdateSchema), (req: Request, res: Response): void => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const costId = parseInt(req.params.id, 10);
+
+    if (!Number.isInteger(costId) || costId <= 0) {
+      res.status(400).json({ error: 'Invalid cost ID' });
+      return;
+    }
+
+    const existing = db
+      .prepare(`SELECT * FROM charger_costs WHERE id = ?`)
+      .get(costId) as ChargerCost | undefined;
+
+    if (!existing) {
+      res.status(404).json({ error: 'Charger cost not found' });
+      return;
+    }
+
+    if (existing.user_id !== authReq.user!.userId && !authReq.user!.isAdmin) {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    const { energy_kwh, price_pence, charger_type } = req.body as Partial<ChargerCost>;
+
+    db.prepare(
+      `UPDATE charger_costs SET
+         energy_kwh = COALESCE(?, energy_kwh),
+         price_pence = COALESCE(?, price_pence),
+         charger_type = COALESCE(?, charger_type)
+       WHERE id = ?`
+    ).run(energy_kwh ?? null, price_pence ?? null, charger_type ?? null, costId);
+
+    const updated = db
+      .prepare(`SELECT * FROM charger_costs WHERE id = ?`)
+      .get(costId) as ChargerCost;
+
+    res.json({ cost: updated });
+  } catch (err) {
+    console.error('[charger/PUT]', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

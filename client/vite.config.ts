@@ -10,5 +10,16 @@ export default defineConfig({
         changeOrigin: true,
       }
     }
-  }
+  },
+  build: {
+    target: 'es2020',
+    minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'router': ['react-router-dom'],
+        },
+      },
+    },
+  },
 })

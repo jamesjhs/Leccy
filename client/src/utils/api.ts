@@ -1,30 +1,67 @@
-import axios from 'axios';
+// ─── Lightweight fetch wrapper (replaces axios) ───────────────────────────────
+// Mirrors the axios API surface used across this codebase:
+//   api.get<T>(path, { params? })  → Promise<{ data: T }>
+//   api.post<T>(path, body)        → Promise<{ data: T }>
+//   api.put<T>(path, body)         → Promise<{ data: T }>
+//   api.delete(path)               → Promise<{ data: unknown }>
+// Errors are thrown as { response: { data, status } } to match axios shape.
 
-const api = axios.create({
-  baseURL: '/api',
-  withCredentials: true,
-});
+type Params = Record<string, string | number | undefined | null>;
 
-// Attach JWT from localStorage if present
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Handle 401 globally
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+async function request<T = unknown>(
+  method: string,
+  path: string,
+  body?: unknown,
+  params?: Params,
+): Promise<{ data: T }> {
+  let url = `/api${path}`;
+  if (params) {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null) q.set(k, String(v));
     }
-    return Promise.reject(error);
+    const qs = q.toString();
+    if (qs) url += `?${qs}`;
   }
-);
+
+  const token = localStorage.getItem('token');
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(url, {
+    method,
+    credentials: 'include',
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  let data: unknown;
+  const ct = res.headers.get('content-type') ?? '';
+  data = ct.includes('application/json') ? await res.json() : await res.text();
+
+  if (res.status === 401) {
+    localStorage.removeItem('token');
+    window.location.href = '/login';
+    // After setting location.href the browser navigates away; return a never-settling
+    // promise so calling code never proceeds past this 401 guard.
+    return new Promise<never>(() => undefined);
+  }
+
+  if (!res.ok) {
+    throw { response: { data, status: res.status } };
+  }
+
+  return { data: data as T };
+}
+
+const api = {
+  get: <T>(path: string, options?: { params?: Params }) =>
+    request<T>('GET', path, undefined, options?.params),
+  post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
+  put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
+  delete: (path: string) => request('DELETE', path),
+};
 
 export default api;
 
@@ -62,6 +99,8 @@ export const sessionsApi = {
 export const chargerApi = {
   getAll: () => api.get<{ costs: ChargerCostWithDate[] }>('/charger'),
   create: (data: NewChargerCost) => api.post<{ cost: ChargerCost }>('/charger', data),
+  update: (id: number, data: Partial<NewChargerCost>) =>
+    api.put<{ cost: ChargerCost }>(`/charger/${id}`, data),
   delete: (id: number) => api.delete(`/charger/${id}`),
 };
 
@@ -193,7 +232,9 @@ export interface TariffConfig {
   user_id: number;
   tariff_name: string;
   rate_pence_per_kwh: number;
-  standing_charge_pence: number;
+  peak_start_time: string;
+  off_peak_rate_pence_per_kwh: number;
+  off_peak_start_time: string;
   effective_from: string;
   created_at: string;
 }
@@ -201,7 +242,9 @@ export interface TariffConfig {
 export interface NewTariff {
   tariff_name: string;
   rate_pence_per_kwh: number;
-  standing_charge_pence: number;
+  peak_start_time: string;
+  off_peak_rate_pence_per_kwh: number;
+  off_peak_start_time: string;
   effective_from: string;
 }
 

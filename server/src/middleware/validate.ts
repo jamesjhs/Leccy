@@ -167,6 +167,18 @@ export const chargerCostSchema = z.object({
     .optional(),
 });
 
+/** PUT /charger/:id */
+export const chargerCostUpdateSchema = z.object({
+  energy_kwh: z
+    .number({ invalid_type_error: 'Must be a number' })
+    .finite()
+    .positive('Must be greater than zero')
+    .max(200, 'Energy exceeds expected maximum')
+    .optional(),
+  price_pence: pence(10_000).optional(),
+  charger_type: z.enum(['home', 'public']).optional(),
+});
+
 /** POST /maintenance */
 export const maintenanceSchema = z.object({
   description: str(2_000),
@@ -174,11 +186,18 @@ export const maintenanceSchema = z.object({
   cost_pence: pence(100_000).nullable().optional(),
 });
 
+/** HH:MM 24-hour time string */
+const timeStr = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Must be a time in HH:MM format');
+
 /** POST /tariff */
 export const tariffSchema = z.object({
   tariff_name: str(100),
   rate_pence_per_kwh: nnReal(10_000),
-  standing_charge_pence: nnReal(10_000),
+  peak_start_time: timeStr,
+  off_peak_rate_pence_per_kwh: nnReal(10_000),
+  off_peak_start_time: timeStr,
   effective_from: isoDate,
 });
 

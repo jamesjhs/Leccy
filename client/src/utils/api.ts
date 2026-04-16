@@ -30,11 +30,25 @@ export default api;
 
 // ---------- Auth ----------
 export const authApi = {
-  login: (licence_plate: string, password: string) =>
-    api.post<{ token: string; user: UserInfo }>('/auth/login', { licence_plate, password }),
+  register: (email: string, password: string, display_name?: string) =>
+    api.post<{ token: string; user: UserInfo }>('/auth/register', { email, password, display_name }),
+  login: (email: string, password: string) =>
+    api.post<{ token: string; user: UserInfo } | { requires_2fa: true; temp_token: string }>('/auth/login', { email, password }),
+  verify2faLogin: (temp_token: string, code: string) =>
+    api.post<{ token: string; user: UserInfo }>('/auth/2fa/verify-login', { temp_token, code }),
+  requestMagicLink: (email: string) =>
+    api.post<{ message: string }>('/auth/magic-link/request', { email }),
+  verifyMagicLink: (token: string) =>
+    api.post<{ token: string; user: UserInfo }>('/auth/magic-link/verify', { token }),
   logout: () => api.post('/auth/logout'),
   me: () => api.get<{ user: UserInfo }>('/auth/me'),
   version: () => api.get<{ version: string }>('/auth/version'),
+  changePassword: (current_password: string, new_password: string) =>
+    api.post('/auth/change-password', { current_password, new_password }),
+  setup2fa: (email: string) => api.post('/auth/2fa/setup', { email }),
+  verify2fa: (code: string) => api.post('/auth/2fa/verify', { code }),
+  disable2fa: (password: string) => api.post('/auth/2fa/disable', { password }),
+  get2faStatus: () => api.get<{ enabled: boolean }>('/auth/2fa/status'),
 };
 
 // ---------- Sessions ----------
@@ -73,6 +87,14 @@ export const analyticsApi = {
     api.get<AnalyticsResult>('/analytics', { params }),
 };
 
+// ---------- Vehicles ----------
+export const vehiclesApi = {
+  getAll: () => api.get<{ vehicles: Vehicle[] }>('/vehicles'),
+  create: (data: NewVehicle) => api.post<{ vehicle: Vehicle }>('/vehicles', data),
+  update: (id: number, data: Partial<NewVehicle>) => api.put<{ vehicle: Vehicle }>(`/vehicles/${id}`, data),
+  delete: (id: number) => api.delete(`/vehicles/${id}`),
+};
+
 // ---------- Admin ----------
 export const adminApi = {
   getUsers: () => api.get<{ users: UserInfo[] }>('/admin/users'),
@@ -80,17 +102,28 @@ export const adminApi = {
   deleteUser: (id: number) => api.delete(`/admin/users/${id}`),
   getSettings: () => api.get<{ settings: AppSetting[] }>('/admin/settings'),
   updateSettings: (data: Record<string, string>) => api.put('/admin/settings', data),
-  setup2fa: (email: string) => api.post('/admin/2fa/setup', { email }),
-  verify2fa: (code: string) => api.post('/admin/2fa/verify', { code }),
 };
 
 // ---------- Types ----------
 export interface UserInfo {
   id: number;
-  licence_plate: string;
-  is_admin: number;
   email: string | null;
+  display_name: string | null;
+  is_admin: number;
   created_at: string;
+}
+
+export interface Vehicle {
+  id: number;
+  user_id: number;
+  licence_plate: string;
+  nickname: string | null;
+  created_at: string;
+}
+
+export interface NewVehicle {
+  licence_plate: string;
+  nickname?: string;
 }
 
 export interface ChargingSession {
@@ -178,9 +211,9 @@ export interface AppSetting {
 }
 
 export interface NewUser {
-  licence_plate: string;
+  email: string;
   password: string;
-  email?: string;
+  display_name?: string;
   is_admin?: boolean;
 }
 

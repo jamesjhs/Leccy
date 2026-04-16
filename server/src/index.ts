@@ -15,6 +15,7 @@ import maintenanceRoutes from './routes/maintenance';
 import tariffRoutes from './routes/tariff';
 import analyticsRoutes from './routes/analytics';
 import adminRoutes from './routes/admin';
+import vehiclesRoutes from './routes/vehicles';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '2030', 10);
@@ -99,6 +100,7 @@ app.use('/api/maintenance', apiLimiter, maintenanceRoutes);
 app.use('/api/tariff', apiLimiter, tariffRoutes);
 app.use('/api/analytics', apiLimiter, analyticsRoutes);
 app.use('/api/admin', apiLimiter, adminRoutes);
+app.use('/api/vehicles', apiLimiter, vehiclesRoutes);
 
 // ─── Serve frontend in production ─────────────────────────────────────────────
 if (IS_PROD) {

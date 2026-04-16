@@ -9,8 +9,11 @@ interface AuthState {
 }
 
 interface UseAuthReturn extends AuthState {
-  login: (licencePlate: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ requires_2fa?: boolean; temp_token?: string }>;
   logout: () => Promise<void>;
+  register: (email: string, password: string, display_name?: string) => Promise<void>;
+  verifyMagicLink: (token: string) => Promise<void>;
+  setAuth: (token: string, user: UserInfo) => void;
 }
 
 export function useAuth(): UseAuthReturn {
@@ -45,9 +48,7 @@ export function useAuth(): UseAuthReturn {
     void fetchMe();
   }, [fetchMe]);
 
-  const login = useCallback(async (licencePlate: string, password: string) => {
-    const res = await authApi.login(licencePlate, password);
-    const { token, user } = res.data;
+  const setAuth = useCallback((token: string, user: UserInfo) => {
     localStorage.setItem('token', token);
     setState({
       user,
@@ -56,6 +57,31 @@ export function useAuth(): UseAuthReturn {
       isAdmin: user.is_admin === 1,
     });
   }, []);
+
+  const login = useCallback(async (email: string, password: string) => {
+    const res = await authApi.login(email, password);
+    const data = res.data;
+    if ('requires_2fa' in data && data.requires_2fa) {
+      return { requires_2fa: true, temp_token: data.temp_token };
+    }
+    if ('token' in data) {
+      const { token, user } = data;
+      setAuth(token, user);
+    }
+    return {};
+  }, [setAuth]);
+
+  const register = useCallback(async (email: string, password: string, display_name?: string) => {
+    const res = await authApi.register(email, password, display_name);
+    const { token, user } = res.data;
+    setAuth(token, user);
+  }, [setAuth]);
+
+  const verifyMagicLink = useCallback(async (token: string) => {
+    const res = await authApi.verifyMagicLink(token);
+    const { token: jwt, user } = res.data;
+    setAuth(jwt, user);
+  }, [setAuth]);
 
   const logout = useCallback(async () => {
     try {
@@ -66,5 +92,5 @@ export function useAuth(): UseAuthReturn {
     }
   }, []);
 
-  return { ...state, login, logout };
+  return { ...state, login, logout, register, verifyMagicLink, setAuth };
 }

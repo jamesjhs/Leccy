@@ -47,7 +47,7 @@ export default function Dashboard() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-green-900 mb-1">
-        Welcome back, <span className="font-mono">{user?.licence_plate}</span> ⚡
+        Welcome back, <span className="font-semibold">{user?.display_name || user?.email}</span> ⚡
       </h1>
       <p className="text-green-600 mb-6 text-sm">Here's your EV cost overview.</p>
 

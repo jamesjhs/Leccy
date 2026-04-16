@@ -24,6 +24,8 @@ export default function NavBar() {
 
   const allLinks = isAdmin ? [...navLinks, { to: '/admin', label: 'Admin' }] : navLinks;
 
+  const displayName = user?.display_name || user?.email || '';
+
   return (
     <nav className="bg-green-800 text-white shadow-md">
       <div className="container mx-auto px-4 max-w-6xl">
@@ -51,9 +53,17 @@ export default function NavBar() {
             ))}
           </div>
 
-          {/* User info + logout (desktop) */}
+          {/* User info + account + logout (desktop) */}
           <div className="hidden md:flex items-center gap-3">
-            <span className="text-green-200 text-sm font-mono">{user?.licence_plate}</span>
+            <Link
+              to="/account"
+              className={`text-sm truncate max-w-[160px] transition-colors ${
+                location.pathname === '/account' ? 'text-white font-semibold' : 'text-green-200 hover:text-white'
+              }`}
+              title={displayName}
+            >
+              {displayName}
+            </Link>
             <button
               onClick={handleLogout}
               className="bg-green-600 hover:bg-green-500 px-3 py-1.5 rounded text-sm font-medium transition-colors"
@@ -96,8 +106,19 @@ export default function NavBar() {
                   {link.label}
                 </Link>
               ))}
+              <Link
+                to="/account"
+                onClick={() => setMenuOpen(false)}
+                className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
+                  location.pathname === '/account'
+                    ? 'bg-green-600 text-white'
+                    : 'text-green-100 hover:bg-green-700'
+                }`}
+              >
+                Account Settings
+              </Link>
               <div className="flex items-center justify-between px-3 pt-2 border-t border-green-700 mt-1">
-                <span className="text-green-200 text-sm font-mono">{user?.licence_plate}</span>
+                <span className="text-green-200 text-sm truncate max-w-[160px]" title={displayName}>{displayName}</span>
                 <button
                   onClick={handleLogout}
                   className="bg-green-600 hover:bg-green-500 px-3 py-1.5 rounded text-sm font-medium transition-colors"

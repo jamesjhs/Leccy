@@ -17,6 +17,8 @@ export interface Vehicle {
   user_id: number;
   licence_plate: string;
   nickname: string | null;
+  vehicle_type: string | null;
+  battery_kwh: number | null;
   created_at: string;
 }
 
@@ -39,6 +41,7 @@ export interface User2FA {
 export interface ChargingSession {
   id: number;
   user_id: number;
+  vehicle_id: number | null;
   odometer_miles: number;
   initial_battery_pct: number;
   initial_range_miles: number;
@@ -63,6 +66,7 @@ export interface ChargerCost {
 export interface MaintenanceLog {
   id: number;
   user_id: number;
+  vehicle_id: number | null;
   description: string;
   log_date: string;
   cost_pence: number | null;

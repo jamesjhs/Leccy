@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { maintenanceApi, MaintenanceLog, NewMaintenance } from '../utils/api';
+import { maintenanceApi, vehiclesApi, MaintenanceLog, NewMaintenance, Vehicle } from '../utils/api';
 
 interface MaintenanceForm {
   description: string;
@@ -10,6 +11,8 @@ interface MaintenanceForm {
 
 export default function Maintenance() {
   const [entries, setEntries] = useState<MaintenanceLog[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -25,12 +28,16 @@ export default function Maintenance() {
 
   async function load() {
     try {
-      const res = await maintenanceApi.getAll();
-      setEntries(res.data.entries);
+      const [entriesRes, vehicleRes] = await Promise.all([
+        maintenanceApi.getAll(selectedVehicleId ?? undefined),
+        vehiclesApi.getAll(),
+      ]);
+      setEntries(entriesRes.data.entries);
+      setVehicles(vehicleRes.data.vehicles);
     } catch {/* ignore */}
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [selectedVehicleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function onSubmit(data: MaintenanceForm) {
     setApiError(null);
@@ -38,6 +45,7 @@ export default function Maintenance() {
     setSubmitting(true);
     try {
       const payload: NewMaintenance = {
+        vehicle_id: selectedVehicleId,
         description: data.description,
         log_date: data.log_date,
         cost_pence:
@@ -65,12 +73,66 @@ export default function Maintenance() {
     } catch {/* ignore */}
   }
 
+  function vehicleLabel(v: Vehicle) {
+    return v.nickname ? `${v.nickname} (${v.licence_plate})` : v.licence_plate;
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-green-900 mb-6">Maintenance Log</h1>
 
+      {/* Vehicle selector */}
+      {vehicles.length === 0 ? (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-6 text-sm text-amber-800">
+          No vehicles added yet.{' '}
+          <Link to="/vehicles" className="font-semibold underline hover:text-amber-900">
+            Add a vehicle
+          </Link>{' '}
+          to link maintenance entries to a specific vehicle.
+        </div>
+      ) : (
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Vehicle</label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedVehicleId(null)}
+              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors border ${
+                selectedVehicleId === null
+                  ? 'bg-green-700 text-white border-green-700'
+                  : 'bg-white text-green-700 border-green-300 hover:bg-green-50'
+              }`}
+            >
+              All Vehicles
+            </button>
+            {vehicles.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setSelectedVehicleId(v.id)}
+                className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors border ${
+                  selectedVehicleId === v.id
+                    ? 'bg-green-700 text-white border-green-700'
+                    : 'bg-white text-green-700 border-green-300 hover:bg-green-50'
+                }`}
+              >
+                🚗 {vehicleLabel(v)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl shadow-sm border border-green-100 p-6 mb-8">
-        <h2 className="text-lg font-semibold text-green-800 mb-4">Add Entry</h2>
+        <h2 className="text-lg font-semibold text-green-800 mb-1">Add Entry</h2>
+        {selectedVehicleId !== null && (
+          <p className="text-xs text-gray-500 mb-4">
+            Logging for: <span className="font-semibold">{vehicleLabel(vehicles.find((v) => v.id === selectedVehicleId)!)}</span>
+          </p>
+        )}
+        {selectedVehicleId === null && vehicles.length > 0 && (
+          <p className="text-xs text-gray-500 mb-4">Select a vehicle above to link this entry, or log without a vehicle.</p>
+        )}
 
         {success && (
           <div className="bg-green-50 border border-green-300 text-green-700 rounded-lg px-4 py-3 mb-5 text-sm">

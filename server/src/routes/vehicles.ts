@@ -25,7 +25,12 @@ router.get('/', (_req: Request, res: Response): void => {
 router.post('/', validate(createVehicleSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const { licence_plate, nickname } = req.body as { licence_plate: string; nickname?: string };
+    const { licence_plate, nickname, vehicle_type, battery_kwh } = req.body as {
+      licence_plate: string;
+      nickname?: string;
+      vehicle_type?: string;
+      battery_kwh?: number | null;
+    };
 
     const existing = db.prepare(`SELECT id FROM vehicles WHERE licence_plate = ?`).get(licence_plate);
     if (existing) {
@@ -34,8 +39,8 @@ router.post('/', validate(createVehicleSchema), (req: Request, res: Response): v
     }
 
     const result = db
-      .prepare(`INSERT INTO vehicles (user_id, licence_plate, nickname) VALUES (?, ?, ?)`)
-      .run(authReq.user!.userId, licence_plate, nickname ?? null);
+      .prepare(`INSERT INTO vehicles (user_id, licence_plate, nickname, vehicle_type, battery_kwh) VALUES (?, ?, ?, ?, ?)`)
+      .run(authReq.user!.userId, licence_plate, nickname ?? null, vehicle_type ?? null, battery_kwh ?? null);
 
     const vehicle = db
       .prepare(`SELECT * FROM vehicles WHERE id = ?`)
@@ -67,9 +72,16 @@ router.put('/:id', validate(updateVehicleSchema), (req: Request, res: Response):
       return;
     }
 
-    const { licence_plate, nickname } = req.body as { licence_plate?: string; nickname?: string };
+    const { licence_plate, nickname, vehicle_type, battery_kwh } = req.body as {
+      licence_plate?: string;
+      nickname?: string;
+      vehicle_type?: string;
+      battery_kwh?: number | null;
+    };
     const newPlate = licence_plate ?? existing.licence_plate;
     const newNick = nickname !== undefined ? nickname : existing.nickname;
+    const newType = vehicle_type !== undefined ? vehicle_type : existing.vehicle_type;
+    const newKwh = battery_kwh !== undefined ? battery_kwh : existing.battery_kwh;
 
     if (licence_plate && licence_plate !== existing.licence_plate) {
       const conflict = db.prepare(`SELECT id FROM vehicles WHERE licence_plate = ? AND id != ?`).get(licence_plate, vehicleId);
@@ -79,8 +91,8 @@ router.put('/:id', validate(updateVehicleSchema), (req: Request, res: Response):
       }
     }
 
-    db.prepare(`UPDATE vehicles SET licence_plate = ?, nickname = ? WHERE id = ?`)
-      .run(newPlate, newNick, vehicleId);
+    db.prepare(`UPDATE vehicles SET licence_plate = ?, nickname = ?, vehicle_type = ?, battery_kwh = ? WHERE id = ?`)
+      .run(newPlate, newNick, newType, newKwh, vehicleId);
 
     const updated = db.prepare(`SELECT * FROM vehicles WHERE id = ?`).get(vehicleId) as Vehicle;
     res.json({ vehicle: updated });

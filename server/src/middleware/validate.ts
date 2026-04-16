@@ -137,6 +137,7 @@ export const verify2faLoginSchema = z.object({
 
 /** POST /sessions */
 export const sessionSchema = z.object({
+  vehicle_id: z.number().int().positive().optional().nullable(),
   odometer_miles: nnReal(999_999),
   initial_battery_pct: percentage,
   initial_range_miles: nnReal(1_000),
@@ -181,6 +182,7 @@ export const chargerCostUpdateSchema = z.object({
 
 /** POST /maintenance */
 export const maintenanceSchema = z.object({
+  vehicle_id: z.number().int().positive().optional().nullable(),
   description: str(2_000),
   log_date: isoDate,
   cost_pence: pence(100_000).nullable().optional(),
@@ -245,6 +247,7 @@ export const verify2faSchema = z.object({
 export const analyticsQuerySchema = z.object({
   startDate: isoDate.optional(),
   endDate: isoDate.optional(),
+  vehicleId: z.string().regex(/^\d+$/, 'Must be a positive integer').optional(),
 });
 
 /** POST /vehicles */
@@ -255,6 +258,8 @@ export const createVehicleSchema = z.object({
     .max(30, 'Licence plate too long')
     .transform((s) => s.replace(/\s+/g, '').toUpperCase()),
   nickname: z.string().max(100).transform((s) => s.trim()).optional(),
+  vehicle_type: z.string().max(100).transform((s) => s.trim()).optional(),
+  battery_kwh: nnReal(500).optional().nullable(),
 });
 
 /** PUT /vehicles/:id */

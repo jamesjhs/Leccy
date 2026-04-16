@@ -11,6 +11,7 @@ import DataEntry from './pages/DataEntry';
 import Maintenance from './pages/Maintenance';
 import Tariff from './pages/Tariff';
 import Analytics from './pages/Analytics';
+import Vehicles from './pages/Vehicles';
 import Admin from './pages/Admin';
 import { UserInfo } from './utils/api';
 
@@ -91,6 +92,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Layout><Tariff /></Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/vehicles"
+            element={
+              <ProtectedRoute>
+                <Layout><Vehicles /></Layout>
               </ProtectedRoute>
             }
           />

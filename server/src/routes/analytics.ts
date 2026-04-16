@@ -30,11 +30,19 @@ interface RawSession {
 router.get('/', validateQuery(analyticsQuerySchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const { startDate, endDate } = req.query as { startDate?: string; endDate?: string };
+    const { startDate, endDate, vehicleId } = req.query as {
+      startDate?: string;
+      endDate?: string;
+      vehicleId?: string;
+    };
 
     let whereClause = `WHERE cs.user_id = ?`;
     const params: (string | number)[] = [authReq.user!.userId];
 
+    if (vehicleId) {
+      whereClause += ` AND cs.vehicle_id = ?`;
+      params.push(parseInt(vehicleId, 10));
+    }
     if (startDate) {
       whereClause += ` AND cs.date_unplugged >= ?`;
       params.push(startDate);

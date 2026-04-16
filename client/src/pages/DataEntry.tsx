@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import {
-  sessionsApi, chargerApi, tariffApi,
-  ChargingSession, ChargerCostWithDate, TariffConfig, NewSession,
+  sessionsApi, chargerApi, tariffApi, vehiclesApi,
+  ChargingSession, ChargerCostWithDate, TariffConfig, NewSession, Vehicle,
 } from '../utils/api';
 
 // Default assumed efficiency when no historical kWh/% data is available.
@@ -36,6 +37,8 @@ export default function DataEntry() {
   const [sessions, setSessions] = useState<ChargingSession[]>([]);
   const [costs, setCosts] = useState<ChargerCostWithDate[]>([]);
   const [tariffs, setTariffs] = useState<TariffConfig[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [costDrafts, setCostDrafts] = useState<Record<number, CostDraft>>({});
   const [savingId, setSavingId] = useState<number | null>(null);
 
@@ -106,17 +109,19 @@ export default function DataEntry() {
 
   const loadData = useCallback(async () => {
     try {
-      const [sessRes, costsRes, tariffRes] = await Promise.all([
-        sessionsApi.getAll(),
+      const [sessRes, costsRes, tariffRes, vehicleRes] = await Promise.all([
+        sessionsApi.getAll(selectedVehicleId ?? undefined),
         chargerApi.getAll(),
         tariffApi.getAll(),
+        vehiclesApi.getAll(),
       ]);
       setSessions(sessRes.data.sessions);
       setCosts(costsRes.data.costs);
       setTariffs(tariffRes.data.tariffs);
+      setVehicles(vehicleRes.data.vehicles);
       buildDrafts(sessRes.data.sessions, costsRes.data.costs, tariffRes.data.tariffs);
     } catch {/* ignore */}
-  }, [buildDrafts]);
+  }, [buildDrafts, selectedVehicleId]);
 
   useEffect(() => { void loadData(); }, [loadData]);
 
@@ -128,6 +133,7 @@ export default function DataEntry() {
     try {
       await sessionsApi.create({
         ...data,
+        vehicle_id: selectedVehicleId ?? null,
         odometer_miles: Number(data.odometer_miles),
         initial_battery_pct: Number(data.initial_battery_pct),
         initial_range_miles: Number(data.initial_range_miles),
@@ -214,6 +220,48 @@ export default function DataEntry() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-green-900 mb-6">Add Charging Session</h1>
+
+      {/* ── Vehicle selector ─────────────────────────────────────────────── */}
+      {vehicles.length === 0 ? (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-6 text-sm text-amber-800">
+          No vehicles added yet.{' '}
+          <Link to="/vehicles" className="font-semibold underline hover:text-amber-900">
+            Add a vehicle
+          </Link>{' '}
+          to link sessions to a specific vehicle.
+        </div>
+      ) : (
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Vehicle</label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedVehicleId(null)}
+              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors border ${
+                selectedVehicleId === null
+                  ? 'bg-green-700 text-white border-green-700'
+                  : 'bg-white text-green-700 border-green-300 hover:bg-green-50'
+              }`}
+            >
+              No vehicle
+            </button>
+            {vehicles.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setSelectedVehicleId(v.id)}
+                className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors border ${
+                  selectedVehicleId === v.id
+                    ? 'bg-green-700 text-white border-green-700'
+                    : 'bg-white text-green-700 border-green-300 hover:bg-green-50'
+                }`}
+              >
+                🚗 {v.nickname ? `${v.nickname} (${v.licence_plate})` : v.licence_plate}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Entry form ──────────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl shadow-sm border border-green-100 p-6 mb-8">

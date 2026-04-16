@@ -7,6 +7,7 @@ const TARIFF_DEFAULTS = {
   peak_start_time: '07:00',
   off_peak_start_time: '00:00',
   off_peak_rate_pence_per_kwh: 0,
+  standing_charge_pence: 0,
 } as const;
 
 export default function Tariff() {
@@ -41,6 +42,7 @@ export default function Tariff() {
       const payload: NewTariff = {
         tariff_name: data.tariff_name,
         rate_pence_per_kwh: Number(data.rate_pence_per_kwh),
+        standing_charge_pence: Number(data.standing_charge_pence),
         peak_start_time: data.peak_start_time,
         off_peak_rate_pence_per_kwh: Number(data.off_peak_rate_pence_per_kwh),
         off_peak_start_time: data.off_peak_start_time,
@@ -69,6 +71,7 @@ export default function Tariff() {
     setEditingId(t.id);
     setValue('tariff_name', t.tariff_name);
     setValue('rate_pence_per_kwh', t.rate_pence_per_kwh);
+    setValue('standing_charge_pence', t.standing_charge_pence ?? TARIFF_DEFAULTS.standing_charge_pence);
     setValue('peak_start_time', t.peak_start_time ?? TARIFF_DEFAULTS.peak_start_time);
     setValue('off_peak_rate_pence_per_kwh', t.off_peak_rate_pence_per_kwh ?? TARIFF_DEFAULTS.off_peak_rate_pence_per_kwh);
     setValue('off_peak_start_time', t.off_peak_start_time ?? TARIFF_DEFAULTS.off_peak_start_time);
@@ -134,6 +137,16 @@ export default function Tariff() {
               />
               {errors.effective_from && <p className="text-red-500 text-xs mt-1">{errors.effective_from.message}</p>}
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Standing Charge (p/day)</label>
+            <input
+              type="number" step="0.01" min="0"
+              className={inputClass}
+              {...register('standing_charge_pence', { required: 'Required', min: { value: 0, message: 'Must be ≥ 0' } })}
+            />
+            {errors.standing_charge_pence && <p className="text-red-500 text-xs mt-1">{errors.standing_charge_pence.message}</p>}
           </div>
 
           {/* Peak rate */}
@@ -215,6 +228,7 @@ export default function Tariff() {
               <thead>
                 <tr className="text-left text-green-700 border-b border-green-100">
                   <th className="pb-2 pr-3">Name</th>
+                  <th className="pb-2 pr-3">Standing (p/day)</th>
                   <th className="pb-2 pr-3">☀️ Peak (p/kWh)</th>
                   <th className="pb-2 pr-3">Peak starts</th>
                   <th className="pb-2 pr-3">🌙 Off-Peak (p/kWh)</th>
@@ -227,6 +241,7 @@ export default function Tariff() {
                 {tariffs.map((t) => (
                   <tr key={t.id} className={`border-b border-gray-50 hover:bg-green-50 ${editingId === t.id ? 'bg-green-50' : ''}`}>
                     <td className="py-2 pr-3 font-semibold">{t.tariff_name}</td>
+                    <td className="py-2 pr-3 font-mono">{t.standing_charge_pence ?? 0}p</td>
                     <td className="py-2 pr-3 font-mono">{t.rate_pence_per_kwh}p</td>
                     <td className="py-2 pr-3 text-gray-600">{t.peak_start_time ?? '—'}</td>
                     <td className="py-2 pr-3 font-mono">{t.off_peak_rate_pence_per_kwh ?? 0}p</td>

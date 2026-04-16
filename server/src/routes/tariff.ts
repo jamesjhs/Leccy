@@ -25,16 +25,16 @@ router.get('/', (req: Request, res: Response): void => {
 router.post('/', validate(tariffSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const { tariff_name, rate_pence_per_kwh, peak_start_time, off_peak_rate_pence_per_kwh, off_peak_start_time, effective_from } =
+    const { tariff_name, rate_pence_per_kwh, standing_charge_pence, peak_start_time, off_peak_rate_pence_per_kwh, off_peak_start_time, effective_from } =
       req.body as TariffConfig;
 
     const result = db
       .prepare(
         `INSERT INTO tariff_config
-           (user_id, tariff_name, rate_pence_per_kwh, peak_start_time, off_peak_rate_pence_per_kwh, off_peak_start_time, effective_from)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+           (user_id, tariff_name, rate_pence_per_kwh, standing_charge_pence, peak_start_time, off_peak_rate_pence_per_kwh, off_peak_start_time, effective_from)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(authReq.user!.userId, tariff_name, rate_pence_per_kwh, peak_start_time, off_peak_rate_pence_per_kwh, off_peak_start_time, effective_from);
+      .run(authReq.user!.userId, tariff_name, rate_pence_per_kwh, standing_charge_pence, peak_start_time, off_peak_rate_pence_per_kwh, off_peak_start_time, effective_from);
 
     const tariff = db
       .prepare(`SELECT * FROM tariff_config WHERE id = ?`)
@@ -71,13 +71,14 @@ router.put('/:id', validate(tariffUpdateSchema), (req: Request, res: Response): 
       return;
     }
 
-    const { tariff_name, rate_pence_per_kwh, peak_start_time, off_peak_rate_pence_per_kwh, off_peak_start_time, effective_from } =
+    const { tariff_name, rate_pence_per_kwh, standing_charge_pence, peak_start_time, off_peak_rate_pence_per_kwh, off_peak_start_time, effective_from } =
       req.body as Partial<TariffConfig>;
 
     db.prepare(
       `UPDATE tariff_config SET
         tariff_name = COALESCE(?, tariff_name),
         rate_pence_per_kwh = COALESCE(?, rate_pence_per_kwh),
+        standing_charge_pence = COALESCE(?, standing_charge_pence),
         peak_start_time = COALESCE(?, peak_start_time),
         off_peak_rate_pence_per_kwh = COALESCE(?, off_peak_rate_pence_per_kwh),
         off_peak_start_time = COALESCE(?, off_peak_start_time),
@@ -86,6 +87,7 @@ router.put('/:id', validate(tariffUpdateSchema), (req: Request, res: Response): 
     ).run(
       tariff_name ?? null,
       rate_pence_per_kwh ?? null,
+      standing_charge_pence ?? null,
       peak_start_time ?? null,
       off_peak_rate_pence_per_kwh ?? null,
       off_peak_start_time ?? null,

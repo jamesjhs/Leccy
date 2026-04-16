@@ -1,8 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  LineChart, Line, BarChart, Bar, ScatterChart, Scatter,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-} from 'recharts';
+import { MiniLineChart, MiniBarChart, MiniScatterChart } from '../charts';
 import { analyticsApi, AnalyticsResult } from '../utils/api';
 
 type Period = 'week' | 'month' | 'all' | 'custom';
@@ -115,64 +112,56 @@ export default function Analytics() {
           {/* Chart 1: Battery efficiency */}
           {data.efficiency_data.length > 0 && (
             <ChartCard title="Battery Efficiency Over Time (kWh/mile)">
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={data.efficiency_data}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0fdf4" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="battery_efficiency" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} name="kWh/mile" />
-                </LineChart>
-              </ResponsiveContainer>
+              <MiniLineChart
+                data={data.efficiency_data as unknown as Record<string, unknown>[]}
+                xKey="date"
+                series={[{ key: 'battery_efficiency', color: '#16a34a', label: 'kWh/mile' }]}
+                height={250}
+              />
             </ChartCard>
           )}
 
           {/* Chart 2: Cost per session */}
           {data.cost_per_session.length > 0 && (
             <ChartCard title="Cost per Charging Session">
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={data.cost_per_session}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0fdf4" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v: number) => [`£${(v / 100).toFixed(2)}`, 'Cost']} />
-                  <Legend />
-                  <Bar dataKey="cost_pence" fill="#22c55e" name="Cost (pence)" />
-                  <Bar dataKey="energy_kwh" fill="#86efac" name="kWh" />
-                </BarChart>
-              </ResponsiveContainer>
+              <MiniBarChart
+                data={data.cost_per_session as unknown as Record<string, unknown>[]}
+                xKey="date"
+                bars={[
+                  { key: 'cost_pence', color: '#22c55e', label: 'Cost (pence)' },
+                  { key: 'energy_kwh', color: '#86efac', label: 'kWh' },
+                ]}
+                height={250}
+                yFmt={(v) => v >= 100 ? `£${(v / 100).toFixed(2)}` : `${v.toFixed(0)}p`}
+              />
             </ChartCard>
           )}
 
           {/* Chart 3: Temperature vs range efficiency */}
           {data.temp_vs_range.length > 0 && (
             <ChartCard title="Temperature vs Range per 1% Battery">
-              <ResponsiveContainer width="100%" height={250}>
-                <ScatterChart>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0fdf4" />
-                  <XAxis dataKey="temp_celsius" name="Temp (°C)" tick={{ fontSize: 11 }} label={{ value: '°C', position: 'insideRight', fontSize: 11 }} />
-                  <YAxis dataKey="range_per_pct" name="Range/%" tick={{ fontSize: 11 }} />
-                  <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                  <Scatter data={data.temp_vs_range} fill="#16a34a" name="Range per %" />
-                </ScatterChart>
-              </ResponsiveContainer>
+              <MiniScatterChart
+                data={data.temp_vs_range as unknown as Record<string, unknown>[]}
+                xKey="temp_celsius"
+                yKey="range_per_pct"
+                color="#16a34a"
+                label="Range per %"
+                height={250}
+                xLabel="°C"
+                yLabel="mi/%"
+              />
             </ChartCard>
           )}
 
           {/* Chart 4: Miles per % */}
           {data.miles_per_pct.length > 0 && (
             <ChartCard title="Miles per 1% Battery Over Time">
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={data.miles_per_pct}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0fdf4" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="miles_per_pct" stroke="#15803d" strokeWidth={2} dot={{ r: 3 }} name="mi per %" />
-                </LineChart>
-              </ResponsiveContainer>
+              <MiniLineChart
+                data={data.miles_per_pct as unknown as Record<string, unknown>[]}
+                xKey="date"
+                series={[{ key: 'miles_per_pct', color: '#15803d', label: 'mi per %' }]}
+                height={250}
+              />
             </ChartCard>
           )}
 

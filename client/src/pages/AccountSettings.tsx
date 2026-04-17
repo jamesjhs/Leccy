@@ -251,9 +251,11 @@ export default function AccountSettings() {
                       setPwMagicSending(true);
                       try {
                         await authApi.requestMagicLink(user.email);
+                        setPwMagicSent(true);
+                      } catch {
+                        // silently ignore — the user gets the same generic message either way
                       } finally {
                         setPwMagicSending(false);
-                        setPwMagicSent(true);
                       }
                     }}
                   >

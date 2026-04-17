@@ -19,6 +19,19 @@
  *
  *   odometer_miles, initial_battery_pct, initial_range_miles,
  *   final_battery_pct, final_range_miles, air_temp_celsius, date
+ *   [, vehicle_licence_plate [, charger_kwh_logged]]
+ *
+ * The first 7 columns are required.  The last two are optional:
+ *
+ *   vehicle_licence_plate  (col 8, optional)
+ *     Licence plate of the vehicle to associate with the session.
+ *     Must already exist in the database under this user's account.
+ *     Leave blank to import without a vehicle association.
+ *
+ *   charger_kwh_logged  (col 9, optional)
+ *     Energy (kWh) recorded by the charger for this session.
+ *     When provided, a charger_costs record is created (price_pence = 0,
+ *     charger_type = 'home').  Leave blank to skip.
  *
  * The date column must be in dd/mm/yy or dd/mm/yyyy format.
  *
@@ -165,13 +178,18 @@ if (isNaN(parseFloat(firstCols[0].trim()))) {
 }
 
 // ---------------------------------------------------------------------------
-// Prepare the INSERT statement
+// Prepare the INSERT statements
 // ---------------------------------------------------------------------------
 const insert = db.prepare(
   `INSERT INTO charging_sessions
-     (user_id, odometer_miles, initial_battery_pct, initial_range_miles,
+     (user_id, vehicle_id, odometer_miles, initial_battery_pct, initial_range_miles,
       final_battery_pct, final_range_miles, air_temp_celsius, date_unplugged)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+);
+
+const insertChargerCost = db.prepare(
+  `INSERT INTO charger_costs (session_id, user_id, energy_kwh, price_pence, charger_type)
+   VALUES (?, ?, ?, 0, 'home')`
 );
 
 // ---------------------------------------------------------------------------
@@ -236,7 +254,42 @@ const importAll = db.transaction(() => {
       continue;
     }
 
-    insert.run(user.id, odometer, initialBattPct, initialRangeMi, finalBattPct, finalRangeMi, airTempC, dateUnplugged);
+    // Optional col 7: vehicle_licence_plate
+    let vehicleId = null;
+    if (cols.length > 7) {
+      const plateRaw = cols[7].trim().replace(/\s+/g, '').toUpperCase();
+      if (plateRaw !== '') {
+        const vehicle = db
+          .prepare(`SELECT id FROM vehicles WHERE licence_plate = ? AND user_id = ?`)
+          .get(plateRaw, user.id);
+        if (vehicle) {
+          vehicleId = vehicle.id;
+        } else {
+          console.warn(`  Line ${lineNum}: vehicle "${plateRaw}" not found for this user — importing without vehicle association.`);
+        }
+      }
+    }
+
+    // Optional col 8: charger_kwh_logged
+    let chargerKwh = null;
+    if (cols.length > 8) {
+      const kwhRaw = cols[8].trim();
+      if (kwhRaw !== '') {
+        const kwh = parseFloat(kwhRaw);
+        if (isNaN(kwh) || !isFinite(kwh) || kwh <= 0 || kwh > 200) {
+          console.warn(`  Line ${lineNum}: charger_kwh_logged "${kwhRaw}" is invalid (must be a positive number ≤ 200) — importing without charger kWh.`);
+        } else {
+          chargerKwh = kwh;
+        }
+      }
+    }
+
+    const result = insert.run(user.id, vehicleId, odometer, initialBattPct, initialRangeMi, finalBattPct, finalRangeMi, airTempC, dateUnplugged);
+
+    if (chargerKwh !== null) {
+      insertChargerCost.run(result.lastInsertRowid, user.id, chargerKwh);
+    }
+
     imported++;
   }
 });

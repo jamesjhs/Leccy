@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker: Technical Manual
+# Leccy — EV Cost Tracker v1.0.4: Technical Manual
 
 ## Architecture Overview
 
@@ -20,7 +20,7 @@ Leccy is a full-stack TypeScript application composed of:
 └─────────────┬───────────────────────┘
               │ HTTP /api/*
 ┌─────────────▼───────────────────────┐
-│  Server (Express - port 3001)       │
+│  Server (Express - port 2030)       │
 │  ├── src/index.ts (app entry)       │
 │  ├── src/routes/*                   │
 │  ├── src/middleware/auth.ts         │
@@ -224,7 +224,7 @@ See `.env.example` for all variables. Key ones:
 | `JWT_SECRET` | ✅ | — | Must be a long random string in production |
 | `ADMIN_PASSWORD` | ✅ | `Admin@123` | Change immediately |
 | `DB_PATH` | ✅ | `./data/leccy.db` | Path to SQLite file |
-| `PORT` | No | `3001` | API server port |
+| `PORT` | No | `2030` | API server port |
 | `NODE_ENV` | No | `development` | Set to `production` for deployment |
 
 ---
@@ -249,7 +249,7 @@ See `.env.example` for all variables. Key ones:
 
 ```bash
 NODE_ENV=production
-PORT=3001
+PORT=2030
 JWT_SECRET=<long-random-secret>
 ADMIN_PASSWORD=<strong-password>
 DB_PATH=/var/data/leccy/leccy.db
@@ -294,7 +294,7 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/leccy.jahosi.co.uk/privkey.pem;
 
     location / {
-        proxy_pass http://127.0.0.1:3001;
+        proxy_pass http://127.0.0.1:2030;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -313,6 +313,31 @@ server {
 - **Routing:** React Router v6 (protected routes via `ProtectedRoute` wrapper)
 - **Styling:** Tailwind CSS with a green EV theme
 - **API Client:** Axios with request/response interceptors for auth
+- **PWA:** Web App Manifest + Service Worker — installable on Android (Chrome) and iOS (Safari)
+
+---
+
+## Progressive Web App (PWA)
+
+Leccy v1.0.4 ships as a fully installable PWA. The following files drive this:
+
+| File | Purpose |
+|---|---|
+| `client/public/manifest.json` | Web App Manifest (name, icons, theme colour, display mode) |
+| `client/public/sw.js` | Service Worker — cache-first static assets, network-first API |
+| `client/public/icons/icon-*.png` | PNG icons in 8 sizes (72 → 512 px) generated from the SVG favicon |
+| `client/public/apple-touch-icon.png` | 180×180 icon used by Safari on iOS |
+
+### Service Worker strategy
+
+- **Navigation requests** (`mode === 'navigate'`): serve the cached SPA shell (`/`) so the app loads offline after the first visit.
+- **`/api/*` requests**: network-first; returns a JSON `503` error response when offline.
+- **All other static assets**: cache-first, populating the cache on the first fetch.
+- Cache is versioned (`leccy-1.0.4`); old caches are purged on activation.
+
+### Content-Security-Policy
+
+The server's Helmet CSP includes `worker-src 'self'` to allow the service worker to be registered from the same origin.
 
 ---
 

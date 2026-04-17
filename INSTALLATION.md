@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker: Installation Guide
+# Leccy — EV Cost Tracker v1.0.4: Installation Guide
 
 ## Prerequisites
 
@@ -295,4 +295,29 @@ curl http://localhost:2030/api/auth/version
 # Check public URL (via Cloudflare)
 curl https://leccy.jahosi.co.uk/api/auth/version
 ```
+
+---
+
+## 11. Installing as a mobile app (PWA)
+
+Leccy v1.0.4 is a fully-featured **Progressive Web App**. Once deployed behind HTTPS, users can install it directly from their mobile browser with no app store required.
+
+### Android (Chrome)
+
+1. Open the site in **Chrome** on Android.
+2. Tap the browser menu (⋮) and choose **Add to Home screen**.
+3. Confirm the name and tap **Add**.
+
+The app will appear on the home screen and launch full-screen without any browser chrome.
+
+### iOS (Safari)
+
+1. Open the site in **Safari** on iPhone or iPad.
+2. Tap the **Share** button (□↑) in the toolbar.
+3. Scroll down and tap **Add to Home Screen**.
+4. Confirm the name and tap **Add**.
+
+The app will appear on the home screen and launch in standalone mode.
+
+> **Note:** iOS requires HTTPS for PWA installation. Ensure Cloudflare's proxy (orange cloud) is active and SSL/TLS mode is set to **Full** or **Full (strict)**.
 

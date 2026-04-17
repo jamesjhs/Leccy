@@ -1,18 +1,12 @@
-import { useState, useEffect } from 'react';
-import { authApi } from '../utils/api';
+import { useState } from 'react';
 import PrivacyPolicy from './PrivacyPolicy';
 import UserManual from './UserManual';
 
+const APP_VERSION = '1.0.3';
+
 export default function Footer() {
-  const [version, setVersion] = useState('1.0.3');
   const [showPolicy, setShowPolicy] = useState(false);
   const [showManual, setShowManual] = useState(false);
-
-  useEffect(() => {
-    authApi.version()
-      .then((res) => setVersion(res.data.version))
-      .catch(() => {/* ignore */});
-  }, []);
 
   return (
     <>
@@ -40,7 +34,7 @@ export default function Footer() {
         >
           User Manual
         </button>{' '}
-        | v{version}
+        | v{APP_VERSION}
       </footer>
 
       {showPolicy && <PrivacyPolicy onClose={() => setShowPolicy(false)} />}

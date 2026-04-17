@@ -156,6 +156,9 @@ export const sessionSchema = z.object({
   date_unplugged: isoDate,
 });
 
+/** PUT /sessions/:id */
+export const sessionUpdateSchema = sessionSchema.partial();
+
 /** POST /charger */
 export const chargerCostSchema = z.object({
   session_id: z.number().int().positive(),

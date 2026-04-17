@@ -94,6 +94,7 @@ export const sessionsApi = {
   getAll: (vehicleId?: number) =>
     api.get<{ sessions: ChargingSession[] }>('/sessions', { params: vehicleId ? { vehicleId } : undefined }),
   create: (data: NewSession) => api.post<{ session: ChargingSession }>('/sessions', data),
+  update: (id: number, data: Partial<NewSession>) => api.put<{ session: ChargingSession }>(`/sessions/${id}`, data),
   delete: (id: number) => api.delete(`/sessions/${id}`),
 };
 

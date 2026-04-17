@@ -40,6 +40,7 @@ app.use(
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
         baseUri: ["'self'"],
+        workerSrc: ["'self'"], // required for service worker registration
       },
     },
     // HSTS: 1 year, include subdomains (Cloudflare also enforces this)

@@ -7,6 +7,33 @@ interface SummaryStats {
   total_cost_pence: number;
   sessions_count: number;
   miles_driven: number;
+  cost_per_mile_pence: number;
+}
+
+// ── Petrol/diesel comparison constants ──────────────────────────────────────
+type FuelType = 'petrol' | 'diesel';
+
+// UK average pump prices (pence per litre), April 2026
+const DEFAULT_FUEL_PRICE_PPL: Record<FuelType, number> = {
+  petrol: 148,
+  diesel: 155,
+};
+
+// Typical real-world fuel economy for an average UK car
+const TYPICAL_MPG: Record<FuelType, number> = {
+  petrol: 40,
+  diesel: 50,
+};
+
+// Imperial gallon in litres
+const LITRES_PER_GALLON = 4.54609;
+
+/** Returns petrol/diesel cost in pence for a given number of miles. */
+function fuelCostPence(miles: number, fuelPricePpl: number, mpg: number): number {
+  if (miles <= 0 || mpg <= 0) return 0;
+  const gallons = miles / mpg;
+  const litres = gallons * LITRES_PER_GALLON;
+  return litres * fuelPricePpl;
 }
 
 export default function Dashboard() {
@@ -16,6 +43,12 @@ export default function Dashboard() {
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [stats, setStats] = useState<SummaryStats | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Petrol/diesel comparison state
+  const [fuelType, setFuelType] = useState<FuelType>('petrol');
+  const [fuelPriceInput, setFuelPriceInput] = useState<string>(
+    (DEFAULT_FUEL_PRICE_PPL.petrol / 100).toFixed(2),
+  );
 
   // Load vehicles and tariffs once
   useEffect(() => {
@@ -43,6 +76,7 @@ export default function Dashboard() {
           total_cost_pence: analyticsRes.data.total_cost_pence,
           sessions_count: analyticsRes.data.sessions_count,
           miles_driven: analyticsRes.data.miles_driven,
+          cost_per_mile_pence: analyticsRes.data.cost_per_mile_pence,
         });
       } catch {/* ignore */} finally {
         setLoading(false);
@@ -139,6 +173,21 @@ export default function Dashboard() {
             />
           </div>
 
+          {/* Petrol/diesel comparison */}
+          {(stats?.miles_driven ?? 0) > 0 && (
+            <FuelComparison
+              evCostPence={stats?.total_cost_pence ?? 0}
+              milesDriven={stats?.miles_driven ?? 0}
+              fuelType={fuelType}
+              onFuelTypeChange={(ft) => {
+                setFuelType(ft);
+                setFuelPriceInput((DEFAULT_FUEL_PRICE_PPL[ft] / 100).toFixed(2));
+              }}
+              fuelPriceInput={fuelPriceInput}
+              onFuelPriceInputChange={setFuelPriceInput}
+            />
+          )}
+
           {/* Quick links */}
           <div className="flex gap-3">
             <Link
@@ -172,6 +221,147 @@ function SummaryCard({ label, value, icon }: SummaryCardProps) {
       <div className="text-2xl mb-1">{icon}</div>
       <div className="text-xl font-bold text-green-900">{value}</div>
       <div className="text-xs text-gray-500 mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+// ── Fuel comparison component ────────────────────────────────────────────────
+
+interface FuelComparisonProps {
+  evCostPence: number;
+  milesDriven: number;
+  fuelType: FuelType;
+  onFuelTypeChange: (ft: FuelType) => void;
+  fuelPriceInput: string;
+  onFuelPriceInputChange: (v: string) => void;
+}
+
+function FuelComparison({
+  evCostPence,
+  milesDriven,
+  fuelType,
+  onFuelTypeChange,
+  fuelPriceInput,
+  onFuelPriceInputChange,
+}: FuelComparisonProps) {
+  const fuelPricePpl = Math.max(0, parseFloat(fuelPriceInput) || 0) * 100;
+  const mpg = TYPICAL_MPG[fuelType];
+  const fuelCost = fuelCostPence(milesDriven, fuelPricePpl, mpg);
+  const saved = fuelCost - evCostPence;
+  const savedPct = fuelCost > 0 ? (saved / fuelCost) * 100 : 0;
+  const evPpm = milesDriven > 0 ? evCostPence / milesDriven : 0;
+  const fuelPpm = milesDriven > 0 ? fuelCost / milesDriven : 0;
+
+  const hasSaving = saved > 0;
+
+  return (
+    <div className="bg-white rounded-xl border border-green-100 shadow-sm p-5 mb-8">
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xl">⛽</span>
+        <h2 className="text-base font-bold text-green-900">vs Petrol / Diesel</h2>
+        <span className="ml-auto text-xs text-gray-400">Based on {milesDriven.toLocaleString()} miles driven</span>
+      </div>
+
+      {/* Controls */}
+      <div className="flex flex-wrap gap-4 items-end mb-5">
+        {/* Fuel type toggle */}
+        <div>
+          <p className="text-xs font-semibold text-gray-600 mb-1.5">Fuel type</p>
+          <div className="flex rounded-lg overflow-hidden border border-gray-200">
+            {(['petrol', 'diesel'] as FuelType[]).map((ft) => (
+              <button
+                key={ft}
+                type="button"
+                onClick={() => onFuelTypeChange(ft)}
+                className={`px-4 py-1.5 text-sm font-semibold capitalize transition-colors ${
+                  fuelType === ft
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-white text-gray-600 hover:bg-amber-50'
+                }`}
+              >
+                {ft}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Price input */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+            Fuel price (£/litre)
+          </label>
+          <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+            <span className="px-3 bg-gray-50 border-r border-gray-300 text-sm text-gray-500 py-2">£</span>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              max="5"
+              value={fuelPriceInput}
+              onChange={(e) => onFuelPriceInputChange(e.target.value)}
+              className="w-24 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+            />
+            <span className="px-3 bg-gray-50 border-l border-gray-300 text-xs text-gray-400 py-2">/litre</span>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-1">
+            UK avg {fuelType} ≈ £{(DEFAULT_FUEL_PRICE_PPL[fuelType] / 100).toFixed(2)}/litre
+          </p>
+        </div>
+
+        <div className="text-xs text-gray-400 pb-5">
+          Assuming typical {fuelType} car: <span className="font-semibold text-gray-600">{mpg} mpg</span>
+        </div>
+      </div>
+
+      {/* Comparison grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-lg">⚡</span>
+            <span className="text-sm font-bold text-green-800">Your EV</span>
+          </div>
+          <div className="text-2xl font-extrabold text-green-900">
+            £{(evCostPence / 100).toFixed(2)}
+          </div>
+          <div className="text-xs text-green-700 mt-0.5">
+            {evPpm.toFixed(1)}p per mile
+          </div>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-lg">⛽</span>
+            <span className="text-sm font-bold text-amber-800 capitalize">
+              Typical {fuelType} car
+            </span>
+          </div>
+          <div className="text-2xl font-extrabold text-amber-900">
+            {fuelCost > 0 ? `£${(fuelCost / 100).toFixed(2)}` : '—'}
+          </div>
+          <div className="text-xs text-amber-700 mt-0.5">
+            {fuelPpm > 0 ? `${fuelPpm.toFixed(1)}p per mile` : 'Enter a fuel price'}
+          </div>
+        </div>
+      </div>
+
+      {/* Savings callout */}
+      {fuelCost > 0 && (
+        <div
+          className={`rounded-xl px-4 py-3 flex items-center gap-3 text-sm font-semibold ${
+            hasSaving
+              ? 'bg-green-700 text-white'
+              : 'bg-red-50 border border-red-200 text-red-800'
+          }`}
+        >
+          <span className="text-xl">{hasSaving ? '🎉' : '📊'}</span>
+          <span>
+            {hasSaving
+              ? `You've saved £${(saved / 100).toFixed(2)} (${savedPct.toFixed(0)}%) compared to a typical ${fuelType} car over these ${milesDriven.toLocaleString()} miles`
+              : `Your EV cost £${(Math.abs(saved) / 100).toFixed(2)} more than a typical ${fuelType} car over these miles`}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

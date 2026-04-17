@@ -18,7 +18,7 @@ export default function UserManual({ onClose }: UserManualProps) {
         </div>
 
         <div className="overflow-y-auto px-6 py-4 text-sm text-gray-700 space-y-5">
-          <p className="text-xs text-gray-500">Leccy v1.0.2 · EV Cost Tracker</p>
+          <p className="text-xs text-gray-500">Leccy v1.0.3 · EV Cost Tracker</p>
 
           {/* ── Getting started ── */}
           <section>

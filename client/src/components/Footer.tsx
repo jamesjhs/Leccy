@@ -4,7 +4,7 @@ import PrivacyPolicy from './PrivacyPolicy';
 import UserManual from './UserManual';
 
 export default function Footer() {
-  const [version, setVersion] = useState('1.0.0');
+  const [version, setVersion] = useState('1.0.3');
   const [showPolicy, setShowPolicy] = useState(false);
   const [showManual, setShowManual] = useState(false);
 

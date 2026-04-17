@@ -90,6 +90,7 @@ export default function DataEntry() {
   const [costDrafts, setCostDrafts] = useState<Record<number, CostDraft>>({});
   const [sessionEdits, setSessionEdits] = useState<Record<number, SessionEdit>>({});
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [enumerating, setEnumerating] = useState(false);
 
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -327,6 +328,48 @@ export default function DataEntry() {
     }));
   }
 
+  // ─── Auto-enumerate costs ─────────────────────────────────────────────────
+  // Calculates and saves home charge costs for every Home row currently showing £0.00.
+  async function autoEnumerateCosts() {
+    const currentTariff = tariffRef.current;
+    if (!currentTariff) return;
+
+    const targets = sessions.filter((s) => {
+      const draft = costDrafts[s.id];
+      return draft?.type === 'home' && Number(draft.price) === 0;
+    });
+    if (targets.length === 0) return;
+
+    setEnumerating(true);
+    try {
+      await Promise.all(
+        targets.map(async (s) => {
+          const draft = costDrafts[s.id];
+          const kwh = Number(draft.kwh);
+          if (!isFinite(kwh) || kwh <= 0) return;
+          const pricePence = Math.round(calcHomeChargeCost(kwh, currentTariff) * 100);
+          if (draft.costId) {
+            await chargerApi.update(draft.costId, {
+              energy_kwh: kwh,
+              price_pence: pricePence,
+              charger_type: 'home',
+            });
+          } else {
+            await chargerApi.create({
+              session_id: s.id,
+              energy_kwh: kwh,
+              price_pence: pricePence,
+              charger_type: 'home',
+            });
+          }
+        }),
+      );
+      void loadData();
+    } catch {/* ignore */} finally {
+      setEnumerating(false);
+    }
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-green-900 mb-6">Add Charging Session</h1>
@@ -512,7 +555,20 @@ export default function DataEntry() {
 
       {/* ── Sessions + inline charger costs ──────────────────────────────── */}
       <div className="bg-white rounded-xl shadow-sm border border-green-100 p-5">
-        <h2 className="text-lg font-bold text-green-900 mb-1">Charging Sessions</h2>
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
+          <h2 className="text-lg font-bold text-green-900">Charging Sessions</h2>
+          {sessions.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void autoEnumerateCosts()}
+              disabled={enumerating || !tariffRef.current}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-50 transition-colors whitespace-nowrap"
+              title="Calculate and save home charge costs for all rows currently showing £0.00"
+            >
+              {enumerating ? '⏳ Calculating…' : '⚡ Auto-enumerate costs'}
+            </button>
+          )}
+        </div>
         <p className="text-xs text-gray-400 mb-4">
           Charger cost columns show <span className="italic">estimated</span> values until you save them manually.
         </p>
@@ -650,6 +706,18 @@ export default function DataEntry() {
                   );
                 })}
               </tbody>
+              <tfoot className="sticky bottom-0 bg-white shadow-[0_-1px_0_#d1fae5]">
+                <tr className="text-green-900 font-semibold text-sm">
+                  <td colSpan={8} className="pt-2 pb-1 pl-3 text-right text-xs text-gray-500 uppercase tracking-wide border-t border-green-100">
+                    Total cost
+                  </td>
+                  <td colSpan={3} className="pt-2 pb-1 pr-2 border-t border-green-100 text-right">
+                    £{Object.values(costDrafts)
+                      .reduce((sum, d) => sum + (Number(d.price) || 0), 0)
+                      .toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}

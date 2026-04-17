@@ -19,7 +19,7 @@ export default function PrivacyPolicy({ onClose }: PrivacyPolicyProps) {
 
         <div className="overflow-y-auto px-6 py-4 text-sm text-gray-700 space-y-5">
           <p className="text-xs text-gray-500">
-            Last updated: April 2026 · Leccy v1.0.0
+            Last updated: April 2026 · Leccy v1.0.2
           </p>
 
           <section>

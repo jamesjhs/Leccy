@@ -11,6 +11,48 @@ import {
 // (roughly 30 kWh per 100 miles), providing a reasonable starting estimate.
 const DEFAULT_KWH_PER_MILE = 0.3;
 
+// Assumed home charger rate (kW) used when no vehicle-specific rate is stored.
+// 7.4 kW is a standard UK single-phase Type 2 home wallbox.
+const DEFAULT_HOME_CHARGE_RATE_KW = 7.4;
+
+/** Convert a "HH:MM" time string to minutes since midnight. */
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+/**
+ * Calculate the cost (in £) of a home charge.
+ *
+ * All kWh is at the off-peak rate unless the charge duration
+ * (kwh / DEFAULT_HOME_CHARGE_RATE_KW) exceeds the off-peak window,
+ * in which case the spill-over kWh is billed at the peak rate.
+ */
+function calcHomeChargeCost(kwh: number, tariff: TariffConfig): number {
+  const offPeakRate = tariff.off_peak_rate_pence_per_kwh ?? tariff.rate_pence_per_kwh;
+  const peakRate = tariff.rate_pence_per_kwh;
+
+  // Off-peak window in hours (handles overnight spans, e.g. 23:00 → 07:00)
+  const offPeakStartMins = timeToMinutes(tariff.off_peak_start_time ?? '00:00');
+  const peakStartMins = timeToMinutes(tariff.peak_start_time ?? '07:00');
+  const windowMins = peakStartMins > offPeakStartMins
+    ? peakStartMins - offPeakStartMins
+    : 24 * 60 - offPeakStartMins + peakStartMins;
+  const offPeakWindowHours = windowMins / 60;
+
+  const chargeDurationHours = kwh / DEFAULT_HOME_CHARGE_RATE_KW;
+
+  if (chargeDurationHours <= offPeakWindowHours) {
+    // Entire charge fits within off-peak window
+    return Math.round(kwh * offPeakRate) / 100;
+  }
+
+  // Part of the charge spills into peak hours
+  const offPeakKwh = offPeakWindowHours * DEFAULT_HOME_CHARGE_RATE_KW;
+  const peakKwh = kwh - offPeakKwh;
+  return Math.round(offPeakKwh * offPeakRate + peakKwh * peakRate) / 100;
+}
+
 // ─── Cost draft per session ────────────────────────────────────────────────
 interface CostDraft {
   costId?: number;          // present if already saved to DB
@@ -92,7 +134,7 @@ export default function DataEntry() {
         } else {
           const estKwh = estimateKwh(s, historicalRatio);
           const estPrice = currentTariff
-            ? Math.round(estKwh * currentTariff.rate_pence_per_kwh) / 100
+            ? calcHomeChargeCost(estKwh, currentTariff)
             : 0;
           drafts[s.id] = {
             type: 'home',
@@ -118,7 +160,13 @@ export default function DataEntry() {
       setSessions(sessRes.data.sessions);
       setCosts(costsRes.data.costs);
       setTariffs(tariffRes.data.tariffs);
-      setVehicles(vehicleRes.data.vehicles);
+      const fetchedVehicles = vehicleRes.data.vehicles;
+      setVehicles(fetchedVehicles);
+      // Auto-select the first vehicle when none is selected yet
+      if (selectedVehicleId === null && fetchedVehicles.length > 0) {
+        setSelectedVehicleId(fetchedVehicles[0].id);
+        return; // loadData will re-run with the new vehicleId
+      }
       buildDrafts(sessRes.data.sessions, costsRes.data.costs, tariffRes.data.tariffs);
     } catch {/* ignore */}
   }, [buildDrafts, selectedVehicleId]);
@@ -234,17 +282,6 @@ export default function DataEntry() {
         <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-700 mb-2">Vehicle</label>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setSelectedVehicleId(null)}
-              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors border ${
-                selectedVehicleId === null
-                  ? 'bg-green-700 text-white border-green-700'
-                  : 'bg-white text-green-700 border-green-300 hover:bg-green-50'
-              }`}
-            >
-              No vehicle
-            </button>
             {vehicles.map((v) => (
               <button
                 key={v.id}
@@ -381,16 +418,16 @@ export default function DataEntry() {
         {sessions.length === 0 ? (
           <p className="text-gray-400 text-sm">No sessions recorded yet.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[580px]">
             <table className="w-full text-sm min-w-[700px]">
-              <thead>
+              <thead className="sticky top-0 bg-white z-10">
                 <tr className="text-left text-green-700 border-b border-green-100">
                   <th className="pb-2 pr-3">Date</th>
                   <th className="pb-2 pr-3">Odo (mi)</th>
-                  <th className="pb-2 pr-3">Init%</th>
-                  <th className="pb-2 pr-3">Final%</th>
-                  <th className="pb-2 pr-3">Range</th>
-                  <th className="pb-2 pr-3">Temp</th>
+                  <th className="pb-2 pr-1 w-10">Init%</th>
+                  <th className="pb-2 pr-1 w-10">Final%</th>
+                  <th className="pb-2 pr-1 w-14">Range</th>
+                  <th className="pb-2 pr-1 w-12">Temp</th>
                   <th className="pb-2 pr-2 border-l border-green-100 pl-3">Type</th>
                   <th className="pb-2 pr-2">kWh</th>
                   <th className="pb-2 pr-2">£</th>
@@ -406,10 +443,10 @@ export default function DataEntry() {
                     <tr key={s.id} className="border-b border-gray-50 hover:bg-green-50 align-middle">
                       <td className="py-2 pr-3 text-gray-600 whitespace-nowrap">{s.date_unplugged}</td>
                       <td className="py-2 pr-3 font-mono">{s.odometer_miles.toLocaleString()}</td>
-                      <td className="py-2 pr-3">{s.initial_battery_pct}%</td>
-                      <td className="py-2 pr-3 text-green-700 font-semibold">{s.final_battery_pct}%</td>
-                      <td className="py-2 pr-3">{s.final_range_miles} mi</td>
-                      <td className="py-2 pr-3">{s.air_temp_celsius}°C</td>
+                      <td className="py-2 pr-1 w-10">{s.initial_battery_pct}%</td>
+                      <td className="py-2 pr-1 w-10 text-green-700 font-semibold">{s.final_battery_pct}%</td>
+                      <td className="py-2 pr-1 w-14 whitespace-nowrap">{s.final_range_miles} mi</td>
+                      <td className="py-2 pr-1 w-12 whitespace-nowrap">{s.air_temp_celsius}°C</td>
 
                       {/* ── Inline cost cells ── */}
                       <td className="py-2 pr-2 border-l border-green-100 pl-3">

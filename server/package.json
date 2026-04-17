@@ -1,7 +1,6 @@
 {
   "name": "leccy-server",
-  "version": "1.0.0",
-  "description": "Leccy EV Cost Tracker - Backend",
+  "version": "1.0.3",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

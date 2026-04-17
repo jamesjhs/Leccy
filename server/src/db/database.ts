@@ -135,7 +135,7 @@ function initializeDatabase(): void {
   runMigrations();
 
   // Seed APP_VERSION
-  const version = process.env.APP_VERSION || '1.0.0';
+  const version = process.env.APP_VERSION || '1.0.3';
   const upsertVersion = db.prepare(
     `INSERT INTO app_settings (key, value) VALUES ('APP_VERSION', ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`

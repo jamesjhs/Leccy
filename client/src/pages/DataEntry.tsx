@@ -11,6 +11,51 @@ import {
 // (roughly 30 kWh per 100 miles), providing a reasonable starting estimate.
 const DEFAULT_KWH_PER_MILE = 0.3;
 
+// Assumed home charger rate (kW) used when no vehicle-specific rate is stored.
+// 7.4 kW is a standard UK single-phase Type 2 home wallbox.
+const DEFAULT_HOME_CHARGE_RATE_KW = 7.4;
+
+/** Convert a "HH:MM" time string to minutes since midnight. */
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+/**
+ * Calculate the cost (in £) of a home charge.
+ *
+ * All kWh is at the off-peak rate unless the charge duration
+ * (kwh / DEFAULT_HOME_CHARGE_RATE_KW) exceeds the off-peak window,
+ * in which case the spill-over kWh is billed at the peak rate.
+ *
+ * Note: this estimate assumes the charge starts at the beginning of the
+ * off-peak window. Actual costs may differ if charging starts later.
+ */
+function calcHomeChargeCost(kwh: number, tariff: TariffConfig): number {
+  const offPeakRate = tariff.off_peak_rate_pence_per_kwh ?? tariff.rate_pence_per_kwh;
+  const peakRate = tariff.rate_pence_per_kwh;
+
+  // Off-peak window in hours (handles overnight spans, e.g. 23:00 → 07:00)
+  const offPeakStartMins = timeToMinutes(tariff.off_peak_start_time ?? '00:00');
+  const peakStartMins = timeToMinutes(tariff.peak_start_time ?? '07:00');
+  const windowMins = peakStartMins > offPeakStartMins
+    ? peakStartMins - offPeakStartMins
+    : 24 * 60 - offPeakStartMins + peakStartMins;
+  const offPeakWindowHours = windowMins / 60;
+
+  const chargeDurationHours = kwh / DEFAULT_HOME_CHARGE_RATE_KW;
+
+  if (chargeDurationHours <= offPeakWindowHours) {
+    // Entire charge fits within off-peak window
+    return Math.round(kwh * offPeakRate) / 100;
+  }
+
+  // Part of the charge spills into peak hours
+  const offPeakKwh = offPeakWindowHours * DEFAULT_HOME_CHARGE_RATE_KW;
+  const peakKwh = kwh - offPeakKwh;
+  return Math.round(offPeakKwh * offPeakRate + peakKwh * peakRate) / 100;
+}
+
 // ─── Cost draft per session ────────────────────────────────────────────────
 interface CostDraft {
   costId?: number;          // present if already saved to DB
@@ -45,6 +90,7 @@ export default function DataEntry() {
   const [costDrafts, setCostDrafts] = useState<Record<number, CostDraft>>({});
   const [sessionEdits, setSessionEdits] = useState<Record<number, SessionEdit>>({});
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [enumerating, setEnumerating] = useState(false);
 
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -108,7 +154,7 @@ export default function DataEntry() {
         } else {
           const estKwh = estimateKwh(s, historicalRatio);
           const estPrice = currentTariff
-            ? Math.round(estKwh * currentTariff.rate_pence_per_kwh) / 100
+            ? calcHomeChargeCost(estKwh, currentTariff)
             : 0;
           drafts[s.id] = {
             type: 'home',
@@ -134,7 +180,13 @@ export default function DataEntry() {
       setSessions(sessRes.data.sessions);
       setCosts(costsRes.data.costs);
       setTariffs(tariffRes.data.tariffs);
-      setVehicles(vehicleRes.data.vehicles);
+      const fetchedVehicles = vehicleRes.data.vehicles;
+      setVehicles(fetchedVehicles);
+      // Auto-select the first vehicle when none is selected yet;
+      // loadData will re-run automatically via useEffect once selectedVehicleId updates.
+      if (selectedVehicleId === null && fetchedVehicles.length > 0) {
+        setSelectedVehicleId(fetchedVehicles[0].id);
+      }
       buildDrafts(sessRes.data.sessions, costsRes.data.costs, tariffRes.data.tariffs);
       // Clear any pending session edits so refreshed data is shown cleanly
       setSessionEdits({});
@@ -171,7 +223,7 @@ export default function DataEntry() {
       const kwh = formKwh && Number(formKwh) > 0 ? Number(formKwh) : autoKwh;
       const currentTariff = tariffRef.current;
       const autoPricePence = currentTariff
-        ? Math.round(kwh * currentTariff.rate_pence_per_kwh)
+        ? Math.round(calcHomeChargeCost(kwh, currentTariff) * 100)
         : 0;
       const pricePence =
         formCost && Number(formCost) >= 0
@@ -276,6 +328,48 @@ export default function DataEntry() {
     }));
   }
 
+  // ─── Auto-enumerate costs ─────────────────────────────────────────────────
+  // Calculates and saves home charge costs for every Home row currently showing £0.00.
+  async function autoEnumerateCosts() {
+    const currentTariff = tariffRef.current;
+    if (!currentTariff) return;
+
+    const targets = sessions.filter((s) => {
+      const draft = costDrafts[s.id];
+      return draft?.type === 'home' && Number(draft.price) === 0;
+    });
+    if (targets.length === 0) return;
+
+    setEnumerating(true);
+    try {
+      await Promise.all(
+        targets.map(async (s) => {
+          const draft = costDrafts[s.id];
+          const kwh = Number(draft.kwh);
+          if (!isFinite(kwh) || kwh <= 0) return;
+          const pricePence = Math.round(calcHomeChargeCost(kwh, currentTariff) * 100);
+          if (draft.costId) {
+            await chargerApi.update(draft.costId, {
+              energy_kwh: kwh,
+              price_pence: pricePence,
+              charger_type: 'home',
+            });
+          } else {
+            await chargerApi.create({
+              session_id: s.id,
+              energy_kwh: kwh,
+              price_pence: pricePence,
+              charger_type: 'home',
+            });
+          }
+        }),
+      );
+      void loadData();
+    } catch {/* ignore */} finally {
+      setEnumerating(false);
+    }
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-green-900 mb-6">Add Charging Session</h1>
@@ -293,17 +387,6 @@ export default function DataEntry() {
         <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-700 mb-2">Vehicle</label>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setSelectedVehicleId(null)}
-              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors border ${
-                selectedVehicleId === null
-                  ? 'bg-green-700 text-white border-green-700'
-                  : 'bg-white text-green-700 border-green-300 hover:bg-green-50'
-              }`}
-            >
-              No vehicle
-            </button>
             {vehicles.map((v) => (
               <button
                 key={v.id}
@@ -472,22 +555,38 @@ export default function DataEntry() {
 
       {/* ── Sessions + inline charger costs ──────────────────────────────── */}
       <div className="bg-white rounded-xl shadow-sm border border-green-100 p-5">
-        <h2 className="text-lg font-bold text-green-900 mb-4">Charging Sessions</h2>
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
+          <h2 className="text-lg font-bold text-green-900">Charging Sessions</h2>
+          {sessions.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void autoEnumerateCosts()}
+              disabled={enumerating || !tariffRef.current}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-50 transition-colors whitespace-nowrap"
+              title="Calculate and save home charge costs for all rows currently showing £0.00"
+            >
+              {enumerating ? '⏳ Calculating…' : '⚡ Auto-enumerate costs'}
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 mb-4">
+          Charger cost columns show <span className="italic">estimated</span> values until you save them manually.
+        </p>
 
         {sessions.length === 0 ? (
           <p className="text-gray-400 text-sm">No sessions recorded yet.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[580px]">
             <table className="w-full text-sm min-w-[900px]">
-              <thead>
+              <thead className="sticky top-0 bg-white z-10 shadow-[0_1px_0_#d1fae5]">
                 <tr className="text-left text-green-700 border-b border-green-100">
                   <th className="pb-2 pr-3">Date</th>
                   <th className="pb-2 pr-3" aria-label="Odometer (miles)">Odo (mi)</th>
-                  <th className="pb-2 pr-3" aria-label="Initial battery percentage">Init%</th>
-                  <th className="pb-2 pr-3" aria-label="Initial range (miles)">Init Range</th>
-                  <th className="pb-2 pr-3" aria-label="Final battery percentage">Final%</th>
-                  <th className="pb-2 pr-3" aria-label="Final range (miles)">Final Range</th>
-                  <th className="pb-2 pr-3" aria-label="Air temperature (°C)">Temp</th>
+                  <th className="pb-2 pr-1" aria-label="Initial battery percentage">Init%</th>
+                  <th className="pb-2 pr-1" aria-label="Initial range (miles)">Init Range</th>
+                  <th className="pb-2 pr-1" aria-label="Final battery percentage">Final%</th>
+                  <th className="pb-2 pr-1" aria-label="Final range (miles)">Final Range</th>
+                  <th className="pb-2 pr-1" aria-label="Air temperature (°C)">Temp</th>
                   <th className="pb-2 pr-2 border-l border-green-100 pl-3">Type</th>
                   <th className="pb-2 pr-2" aria-label="Energy (kWh)">kWh</th>
                   <th className="pb-2 pr-2" aria-label="Cost (£)">£</th>
@@ -518,7 +617,7 @@ export default function DataEntry() {
                           className={`${rowInputClass} w-24`}
                         />
                       </td>
-                      <td className="py-2 pr-3">
+                      <td className="py-2 pr-1">
                         <input
                           type="number" min="0" max="100" step="1"
                           value={edit.initial_battery_pct ?? s.initial_battery_pct}
@@ -526,7 +625,7 @@ export default function DataEntry() {
                           className={`${rowInputClass} w-14`}
                         />
                       </td>
-                      <td className="py-2 pr-3">
+                      <td className="py-2 pr-1">
                         <input
                           type="number" step="0.1" min="0" max="1000"
                           value={edit.initial_range_miles ?? s.initial_range_miles}
@@ -534,7 +633,7 @@ export default function DataEntry() {
                           className={`${rowInputClass} w-16`}
                         />
                       </td>
-                      <td className="py-2 pr-3">
+                      <td className="py-2 pr-1">
                         <input
                           type="number" min="0" max="100" step="1"
                           value={edit.final_battery_pct ?? s.final_battery_pct}
@@ -542,7 +641,7 @@ export default function DataEntry() {
                           className={`${rowInputClass} w-14`}
                         />
                       </td>
-                      <td className="py-2 pr-3">
+                      <td className="py-2 pr-1">
                         <input
                           type="number" step="0.1" min="0" max="1000"
                           value={edit.final_range_miles ?? s.final_range_miles}
@@ -550,7 +649,7 @@ export default function DataEntry() {
                           className={`${rowInputClass} w-16`}
                         />
                       </td>
-                      <td className="py-2 pr-3">
+                      <td className="py-2 pr-1">
                         <input
                           type="number" step="0.1" min="-60" max="60"
                           value={edit.air_temp_celsius ?? s.air_temp_celsius}
@@ -607,6 +706,18 @@ export default function DataEntry() {
                   );
                 })}
               </tbody>
+              <tfoot className="sticky bottom-0 bg-white shadow-[0_-1px_0_#d1fae5]">
+                <tr className="text-green-900 font-semibold text-sm">
+                  <td colSpan={8} className="pt-2 pb-1 pl-3 text-right text-xs text-gray-500 uppercase tracking-wide border-t border-green-100">
+                    Total cost
+                  </td>
+                  <td colSpan={3} className="pt-2 pb-1 pr-2 border-t border-green-100 text-right">
+                    £{Object.values(costDrafts)
+                      .reduce((sum, d) => sum + (Number(d.price) || 0), 0)
+                      .toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}

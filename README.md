@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker · v1.0.4
+# Leccy — EV Cost Tracker · v1.1.1
 
 A full-stack web application for logging and analysing the cost of charging an electric vehicle.  Installs as a native-feeling app on Android (Chrome) and iOS (Safari) via the browser's **Add to Home Screen** prompt.
 
@@ -9,6 +9,7 @@ A full-stack web application for logging and analysing the cost of charging an e
 - Maintain a vehicle maintenance log
 - Manage electricity tariffs over time
 - Analytics dashboard with charts (efficiency, cost per session, temperature vs range)
+- **Advanced analytics** — Battery Health Proxy, Thermal Impact, GOM Accuracy, Range Anxiety Gauge, and Charging Habits (v1.1.1)
 - Multi-user support with admin panel
 - **Progressive Web App (PWA)** — install on Android or iOS for a full-screen, app-like experience
 
@@ -25,4 +26,4 @@ See [INSTALLATION.md](INSTALLATION.md) for the full setup guide.
 
 ## Version
 
-**1.0.4**
+**1.1.1**

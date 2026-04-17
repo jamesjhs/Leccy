@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker v1.0.4: Installation Guide
+# Leccy — EV Cost Tracker v1.1.1: Installation Guide
 
 ## Prerequisites
 
@@ -300,7 +300,7 @@ curl https://leccy.jahosi.co.uk/api/auth/version
 
 ## 11. Installing as a mobile app (PWA)
 
-Leccy v1.0.4 is a fully-featured **Progressive Web App**. Once deployed behind HTTPS, users can install it directly from their mobile browser with no app store required.
+Leccy v1.1.1 is a fully-featured **Progressive Web App**. Once deployed behind HTTPS, users can install it directly from their mobile browser with no app store required.
 
 ### Android (Chrome)
 

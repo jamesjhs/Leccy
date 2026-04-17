@@ -18,7 +18,7 @@ export default function UserManual({ onClose }: UserManualProps) {
         </div>
 
         <div className="overflow-y-auto px-6 py-4 text-sm text-gray-700 space-y-5">
-          <p className="text-xs text-gray-500">Leccy v1.0.3 · EV Cost Tracker</p>
+          <p className="text-xs text-gray-500">Leccy v1.1.1 · EV Cost Tracker</p>
 
           {/* ── Getting started ── */}
           <section>
@@ -134,6 +134,35 @@ export default function UserManual({ onClose }: UserManualProps) {
               <li><strong>Battery efficiency:</strong> how much range you get per charge.</li>
               <li><strong>Temperature vs range:</strong> shows how cold weather affects your EV's range.</li>
               <li><strong>Miles per % battery:</strong> tracks how many miles you get from each percentage point of charge.</li>
+            </ul>
+            <p className="mt-2 mb-1 font-semibold text-green-700">Advanced Insight Charts (v1.1.1)</p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>
+                <strong>Battery Health Proxy:</strong> plots your car's projected full-charge range
+                against odometer reading. A falling trendline indicates real-world battery degradation
+                over time.
+              </li>
+              <li>
+                <strong>Thermal Impact on Charging:</strong> scatter chart showing how outside
+                temperature affects how much energy is added per session. Point opacity reflects
+                your starting battery level.
+              </li>
+              <li>
+                <strong>GOM Accuracy:</strong> compares the car's estimated range consumed against
+                the actual miles you drove. Points above the diagonal line mean the car
+                under-estimated; points below mean it over-estimated. The accuracy ratio is shown as
+                a summary badge above the chart.
+              </li>
+              <li>
+                <strong>Range Anxiety Gauge:</strong> histogram of how full your battery is when you
+                plug in. Bars below 20% are shown in orange as a warning. A dashed line marks your
+                median plug-in level.
+              </li>
+              <li>
+                <strong>Charging Habits by Day:</strong> bar chart showing which days of the week
+                you charge most. Hover over a bar to see the average energy added and percentage
+                charged on that day.
+              </li>
             </ul>
             <p className="mt-2">
               Use the <strong>date range filter</strong> at the top of the page to focus on a

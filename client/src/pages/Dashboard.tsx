@@ -177,7 +177,7 @@ export default function Dashboard() {
           {(stats?.miles_driven ?? 0) > 0 && (
             <FuelComparison
               evCostPence={stats?.total_cost_pence ?? 0}
-              milesDriver={stats?.miles_driven ?? 0}
+              milesDriven={stats?.miles_driven ?? 0}
               fuelType={fuelType}
               onFuelTypeChange={(ft) => {
                 setFuelType(ft);
@@ -229,7 +229,7 @@ function SummaryCard({ label, value, icon }: SummaryCardProps) {
 
 interface FuelComparisonProps {
   evCostPence: number;
-  milesDriver: number;
+  milesDriven: number;
   fuelType: FuelType;
   onFuelTypeChange: (ft: FuelType) => void;
   fuelPriceInput: string;
@@ -238,7 +238,7 @@ interface FuelComparisonProps {
 
 function FuelComparison({
   evCostPence,
-  milesDriver,
+  milesDriven,
   fuelType,
   onFuelTypeChange,
   fuelPriceInput,
@@ -246,11 +246,11 @@ function FuelComparison({
 }: FuelComparisonProps) {
   const fuelPricePpl = Math.max(0, parseFloat(fuelPriceInput) || 0) * 100;
   const mpg = TYPICAL_MPG[fuelType];
-  const fuelCost = fuelCostPence(milesDriver, fuelPricePpl, mpg);
+  const fuelCost = fuelCostPence(milesDriven, fuelPricePpl, mpg);
   const saved = fuelCost - evCostPence;
   const savedPct = fuelCost > 0 ? (saved / fuelCost) * 100 : 0;
-  const evPpm = milesDriver > 0 ? evCostPence / milesDriver : 0;
-  const fuelPpm = milesDriver > 0 ? fuelCost / milesDriver : 0;
+  const evPpm = milesDriven > 0 ? evCostPence / milesDriven : 0;
+  const fuelPpm = milesDriven > 0 ? fuelCost / milesDriven : 0;
 
   const hasSaving = saved > 0;
 
@@ -260,7 +260,7 @@ function FuelComparison({
       <div className="flex items-center gap-2 mb-4">
         <span className="text-xl">⛽</span>
         <h2 className="text-base font-bold text-green-900">vs Petrol / Diesel</h2>
-        <span className="ml-auto text-xs text-gray-400">Based on {milesDriver.toLocaleString()} miles driven</span>
+        <span className="ml-auto text-xs text-gray-400">Based on {milesDriven.toLocaleString()} miles driven</span>
       </div>
 
       {/* Controls */}
@@ -357,7 +357,7 @@ function FuelComparison({
           <span className="text-xl">{hasSaving ? '🎉' : '📊'}</span>
           <span>
             {hasSaving
-              ? `You've saved £${(saved / 100).toFixed(2)} (${savedPct.toFixed(0)}%) compared to a typical ${fuelType} car over these ${milesDriver.toLocaleString()} miles`
+              ? `You've saved £${(saved / 100).toFixed(2)} (${savedPct.toFixed(0)}%) compared to a typical ${fuelType} car over these ${milesDriven.toLocaleString()} miles`
               : `Your EV cost £${(Math.abs(saved) / 100).toFixed(2)} more than a typical ${fuelType} car over these miles`}
           </span>
         </div>

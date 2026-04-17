@@ -129,6 +129,11 @@ export const confirmPasswordSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
+/** DELETE /auth/account — requires password confirmation to permanently delete the account */
+export const deleteAccountSchema = z.object({
+  password: z.string().min(1).max(128),
+});
+
 /** POST /auth/2fa/verify-login */
 export const verify2faLoginSchema = z.object({
   temp_token: z.string().min(1).max(512),

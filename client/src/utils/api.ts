@@ -60,7 +60,7 @@ const api = {
     request<T>('GET', path, undefined, options?.params),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
-  delete: (path: string) => request('DELETE', path),
+  delete: (path: string, body?: unknown) => request('DELETE', path, body),
 };
 
 export default api;
@@ -86,6 +86,7 @@ export const authApi = {
   verify2fa: (code: string) => api.post('/auth/2fa/verify', { code }),
   disable2fa: (password: string) => api.post('/auth/2fa/disable', { password }),
   get2faStatus: () => api.get<{ enabled: boolean }>('/auth/2fa/status'),
+  deleteAccount: (password: string) => api.delete('/auth/account', { password }),
 };
 
 // ---------- Sessions ----------

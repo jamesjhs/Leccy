@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useAuthContext } from '../App';
+import PublicFooter from '../components/PublicFooter';
 
 interface RegisterForm {
   display_name: string;
@@ -172,10 +173,9 @@ export default function Register() {
           </div>
         </div>
 
-        <p className="text-green-400 text-xs text-center mt-6">
-          © J Rowson 2026 · jahosi.co.uk
-        </p>
+        <PublicFooter />
       </div>
     </div>
   );
 }
+

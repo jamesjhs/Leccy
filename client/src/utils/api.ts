@@ -40,7 +40,7 @@ async function request<T = unknown>(
   const ct = res.headers.get('content-type') ?? '';
   data = ct.includes('application/json') ? await res.json() : await res.text();
 
-  if (res.status === 401) {
+  if (res.status === 401 && !window.location.pathname.startsWith('/login')) {
     localStorage.removeItem('token');
     window.location.href = '/login';
     // After setting location.href the browser navigates away; return a never-settling

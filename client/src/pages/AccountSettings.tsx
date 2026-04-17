@@ -231,7 +231,16 @@ export default function AccountSettings() {
         <h2 className="text-lg font-bold text-green-900 mb-4">Change Password</h2>
 
         {pwSuccess && <div className="bg-green-50 border border-green-300 text-green-700 rounded-lg px-4 py-3 mb-4 text-sm">{pwSuccess}</div>}
-        {pwError && <div className="bg-red-50 border border-red-300 text-red-700 rounded-lg px-4 py-3 mb-4 text-sm">{pwError}</div>}
+        {pwError && (
+          <div className="bg-red-50 border border-red-300 text-red-700 rounded-lg px-4 py-3 mb-4 text-sm">
+            {pwError}{' '}
+            {pwError.toLowerCase().includes('incorrect') && (
+              <a href="/login" className="underline font-medium text-red-700 hover:text-red-900">
+                Forgot your password? Sign in via email link.
+              </a>
+            )}
+          </div>
+        )}
 
         <form onSubmit={handlePwSubmit(onChangePassword)} className="space-y-4">
           <div>

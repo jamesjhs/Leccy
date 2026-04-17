@@ -392,7 +392,7 @@ router.post('/change-password', authenticate, validate(changePasswordSchema), as
 
     const valid = await bcrypt.compare(current_password, user.password_hash);
     if (!valid) {
-      res.status(401).json({ error: 'Current password is incorrect' });
+      res.status(403).json({ error: 'Current password is incorrect' });
       return;
     }
 

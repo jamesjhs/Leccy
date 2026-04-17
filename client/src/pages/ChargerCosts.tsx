@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { chargerApi, sessionsApi, ChargerCostWithDate, ChargingSession, NewChargerCost } from '../utils/api';
+import { chargerApi, sessionsApi, tariffApi, ChargerCostWithDate, ChargingSession, NewChargerCost, TariffConfig } from '../utils/api';
 
 interface ChargerForm {
   session_id: number;
@@ -8,11 +8,21 @@ interface ChargerForm {
   price_pounds: number; // UI uses pounds, convert to pence for API
   charger_type: 'home' | 'public';
   charger_name?: string;
+  rate_type: 'peak' | 'off_peak';
+}
+
+function getActiveTariff(tariffs: TariffConfig[]): TariffConfig | null {
+  const today = new Date().toISOString().split('T')[0];
+  const active = tariffs
+    .filter((t) => t.effective_from <= today)
+    .sort((a, b) => b.effective_from.localeCompare(a.effective_from));
+  return active[0] ?? null;
 }
 
 export default function ChargerCosts() {
   const [costs, setCosts] = useState<ChargerCostWithDate[]>([]);
   const [sessions, setSessions] = useState<ChargingSession[]>([]);
+  const [tariffs, setTariffs] = useState<TariffConfig[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -22,16 +32,40 @@ export default function ChargerCosts() {
     handleSubmit,
     watch,
     reset,
+    setValue,
     formState: { errors },
-  } = useForm<ChargerForm>({ defaultValues: { charger_type: 'home' } });
+  } = useForm<ChargerForm>({ defaultValues: { charger_type: 'home', rate_type: 'peak' } });
 
   const chargerType = watch('charger_type');
+  const energyKwh = watch('energy_kwh');
+  const rateType = watch('rate_type');
+
+  const activeTariff = getActiveTariff(tariffs);
+  const isHome = chargerType === 'home';
+
+  // Auto-calculate price for home charges whenever energy or rate type changes
+  useEffect(() => {
+    if (!isHome || !activeTariff) return;
+    const kwhNum = Number(energyKwh);
+    if (!isFinite(kwhNum) || kwhNum <= 0) return;
+    const ratePencePerKwh =
+      rateType === 'off_peak'
+        ? (activeTariff.off_peak_rate_pence_per_kwh ?? activeTariff.rate_pence_per_kwh)
+        : activeTariff.rate_pence_per_kwh;
+    const price = (kwhNum * ratePencePerKwh) / 100;
+    setValue('price_pounds', Number(price.toFixed(3)));
+  }, [energyKwh, rateType, isHome, activeTariff, setValue]);
 
   async function load() {
     try {
-      const [costsRes, sessRes] = await Promise.all([chargerApi.getAll(), sessionsApi.getAll()]);
+      const [costsRes, sessRes, tariffRes] = await Promise.all([
+        chargerApi.getAll(),
+        sessionsApi.getAll(),
+        tariffApi.getAll(),
+      ]);
       setCosts(costsRes.data.costs);
       setSessions(sessRes.data.sessions);
+      setTariffs(tariffRes.data.tariffs);
     } catch {/* ignore */}
   }
 
@@ -51,7 +85,7 @@ export default function ChargerCosts() {
       };
       await chargerApi.create(payload);
       setSuccess('Charger cost saved!');
-      reset({ charger_type: 'home' });
+      reset({ charger_type: 'home', rate_type: 'peak' });
       void load();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to save';
@@ -136,22 +170,69 @@ export default function ChargerCosts() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Total Price (£)</label>
-              <input
-                type="number"
-                step="0.001"
-                min="0"
-                max="10000"
-                inputMode="decimal"
-                placeholder="0.000"
-                className={inputClass}
-                {...register('price_pounds', {
-                  required: 'Required',
-                  min: { value: 0, message: 'Must be ≥ 0' },
-                  max: { value: 10000, message: 'Value too large' },
-                  validate: (v) => isFinite(Number(v)) || 'Must be a valid number',
-                })}
-              />
+              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                Total Price (£)
+              </label>
+              {isHome ? (
+                <>
+                  {activeTariff ? (
+                    <>
+                      <input
+                        type="number"
+                        readOnly
+                        tabIndex={-1}
+                        className={`${inputClass} bg-green-50 text-green-800 cursor-default`}
+                        {...register('price_pounds', {
+                          required: 'Required',
+                          min: { value: 0, message: 'Must be ≥ 0' },
+                          validate: (v) => isFinite(Number(v)) || 'Must be a valid number',
+                        })}
+                      />
+                      <p className="text-xs text-green-700 mt-1">
+                        Auto-calculated from tariff <span className="font-semibold">{activeTariff.tariff_name}</span>
+                        {' '}({rateType === 'off_peak' ? (activeTariff.off_peak_rate_pence_per_kwh ?? activeTariff.rate_pence_per_kwh) : activeTariff.rate_pence_per_kwh}p/kWh)
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0"
+                        max="10000"
+                        inputMode="decimal"
+                        placeholder="0.000"
+                        className={inputClass}
+                        {...register('price_pounds', {
+                          required: 'Required',
+                          min: { value: 0, message: 'Must be ≥ 0' },
+                          max: { value: 10000, message: 'Value too large' },
+                          validate: (v) => isFinite(Number(v)) || 'Must be a valid number',
+                        })}
+                      />
+                      <p className="text-xs text-amber-600 mt-1">No active tariff — enter price manually. Configure a tariff on the <a href="/tariff" className="underline">Tariff page</a>.</p>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    max="10000"
+                    inputMode="decimal"
+                    placeholder="0.000"
+                    className={inputClass}
+                    {...register('price_pounds', {
+                      required: 'Required',
+                      min: { value: 0, message: 'Must be ≥ 0' },
+                      max: { value: 10000, message: 'Value too large' },
+                      validate: (v) => isFinite(Number(v)) || 'Must be a valid number',
+                    })}
+                  />
+                </>
+              )}
               {errors.price_pounds && <p className="text-red-500 text-xs mt-1">{errors.price_pounds.message}</p>}
             </div>
           </div>
@@ -169,6 +250,22 @@ export default function ChargerCosts() {
               </label>
             </div>
           </div>
+
+          {isHome && activeTariff && (
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Tariff Rate</label>
+              <div className="flex gap-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" value="peak" {...register('rate_type')} className="accent-amber-500" />
+                  <span className="text-sm">☀️ Peak ({activeTariff.rate_pence_per_kwh}p/kWh)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" value="off_peak" {...register('rate_type')} className="accent-blue-500" />
+                  <span className="text-sm">🌙 Off-Peak ({activeTariff.off_peak_rate_pence_per_kwh != null ? `${activeTariff.off_peak_rate_pence_per_kwh}p/kWh` : 'N/A'})</span>
+                </label>
+              </div>
+            </div>
+          )}
 
           {chargerType === 'public' && (
             <div>

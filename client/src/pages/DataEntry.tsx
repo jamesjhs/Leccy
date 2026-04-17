@@ -136,6 +136,8 @@ export default function DataEntry() {
       setTariffs(tariffRes.data.tariffs);
       setVehicles(vehicleRes.data.vehicles);
       buildDrafts(sessRes.data.sessions, costsRes.data.costs, tariffRes.data.tariffs);
+      // Clear any pending session edits so refreshed data is shown cleanly
+      setSessionEdits({});
     } catch {/* ignore */}
   }, [buildDrafts, selectedVehicleId]);
 
@@ -480,15 +482,15 @@ export default function DataEntry() {
               <thead>
                 <tr className="text-left text-green-700 border-b border-green-100">
                   <th className="pb-2 pr-3">Date</th>
-                  <th className="pb-2 pr-3">Odo (mi)</th>
-                  <th className="pb-2 pr-3">Init%</th>
-                  <th className="pb-2 pr-3">Init Range</th>
-                  <th className="pb-2 pr-3">Final%</th>
-                  <th className="pb-2 pr-3">Final Range</th>
-                  <th className="pb-2 pr-3">Temp</th>
+                  <th className="pb-2 pr-3" aria-label="Odometer (miles)">Odo (mi)</th>
+                  <th className="pb-2 pr-3" aria-label="Initial battery percentage">Init%</th>
+                  <th className="pb-2 pr-3" aria-label="Initial range (miles)">Init Range</th>
+                  <th className="pb-2 pr-3" aria-label="Final battery percentage">Final%</th>
+                  <th className="pb-2 pr-3" aria-label="Final range (miles)">Final Range</th>
+                  <th className="pb-2 pr-3" aria-label="Air temperature (°C)">Temp</th>
                   <th className="pb-2 pr-2 border-l border-green-100 pl-3">Type</th>
-                  <th className="pb-2 pr-2">kWh</th>
-                  <th className="pb-2 pr-2">£</th>
+                  <th className="pb-2 pr-2" aria-label="Energy (kWh)">kWh</th>
+                  <th className="pb-2 pr-2" aria-label="Cost (£)">£</th>
                   <th className="pb-2" colSpan={2}></th>
                 </tr>
               </thead>

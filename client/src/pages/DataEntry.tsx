@@ -27,6 +27,9 @@ function timeToMinutes(t: string): number {
  * All kWh is at the off-peak rate unless the charge duration
  * (kwh / DEFAULT_HOME_CHARGE_RATE_KW) exceeds the off-peak window,
  * in which case the spill-over kWh is billed at the peak rate.
+ *
+ * Note: this estimate assumes the charge starts at the beginning of the
+ * off-peak window. Actual costs may differ if charging starts later.
  */
 function calcHomeChargeCost(kwh: number, tariff: TariffConfig): number {
   const offPeakRate = tariff.off_peak_rate_pence_per_kwh ?? tariff.rate_pence_per_kwh;
@@ -162,10 +165,10 @@ export default function DataEntry() {
       setTariffs(tariffRes.data.tariffs);
       const fetchedVehicles = vehicleRes.data.vehicles;
       setVehicles(fetchedVehicles);
-      // Auto-select the first vehicle when none is selected yet
+      // Auto-select the first vehicle when none is selected yet;
+      // loadData will re-run automatically via useEffect once selectedVehicleId updates.
       if (selectedVehicleId === null && fetchedVehicles.length > 0) {
         setSelectedVehicleId(fetchedVehicles[0].id);
-        return; // loadData will re-run with the new vehicleId
       }
       buildDrafts(sessRes.data.sessions, costsRes.data.costs, tariffRes.data.tariffs);
     } catch {/* ignore */}
@@ -420,7 +423,7 @@ export default function DataEntry() {
         ) : (
           <div className="overflow-auto max-h-[580px]">
             <table className="w-full text-sm min-w-[700px]">
-              <thead className="sticky top-0 bg-white z-10">
+              <thead className="sticky top-0 bg-white z-10 shadow-[0_1px_0_#d1fae5]">
                 <tr className="text-left text-green-700 border-b border-green-100">
                   <th className="pb-2 pr-3">Date</th>
                   <th className="pb-2 pr-3">Odo (mi)</th>

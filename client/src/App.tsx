@@ -13,6 +13,7 @@ import Tariff from './pages/Tariff';
 import Analytics from './pages/Analytics';
 import Vehicles from './pages/Vehicles';
 import Admin from './pages/Admin';
+import Landing from './pages/Landing';
 import { UserInfo } from './utils/api';
 
 interface AuthContextType {
@@ -53,7 +54,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={auth.user && !auth.isLoading ? <Navigate to="/dashboard" replace /> : <Login />} />
           <Route path="/register" element={auth.user && !auth.isLoading ? <Navigate to="/dashboard" replace /> : <Register />} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={auth.user && !auth.isLoading ? <Navigate to="/dashboard" replace /> : <Landing />} />
           <Route
             path="/dashboard"
             element={

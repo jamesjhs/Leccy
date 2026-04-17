@@ -40,6 +40,8 @@ export default function AccountSettings() {
   // Password change state
   const [pwSuccess, setPwSuccess] = useState<string | null>(null);
   const [pwError, setPwError] = useState<string | null>(null);
+  const [pwMagicSent, setPwMagicSent] = useState(false);
+  const [pwMagicSending, setPwMagicSending] = useState(false);
 
   // 2FA state
   const [twoFAEnabled, setTwoFAEnabled] = useState(false);
@@ -118,6 +120,7 @@ export default function AccountSettings() {
   async function onChangePassword(data: ChangePasswordForm) {
     setPwError(null);
     setPwSuccess(null);
+    setPwMagicSent(false);
     try {
       await authApi.changePassword(data.current_password, data.new_password);
       setPwSuccess('Password updated successfully.');
@@ -233,11 +236,31 @@ export default function AccountSettings() {
         {pwSuccess && <div className="bg-green-50 border border-green-300 text-green-700 rounded-lg px-4 py-3 mb-4 text-sm">{pwSuccess}</div>}
         {pwError && (
           <div className="bg-red-50 border border-red-300 text-red-700 rounded-lg px-4 py-3 mb-4 text-sm">
-            {pwError}{' '}
+            <p>{pwError}</p>
             {pwError.toLowerCase().includes('incorrect') && (
-              <a href="/login" className="underline font-medium text-red-700 hover:text-red-900">
-                Forgot your password? Sign in via email link.
-              </a>
+              <p className="mt-2">
+                {pwMagicSent ? (
+                  <span className="text-green-700 font-medium">✓ Sign-in link sent — check your email.</span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={pwMagicSending}
+                    className="underline font-medium text-red-700 hover:text-red-900 disabled:opacity-60"
+                    onClick={async () => {
+                      if (!user?.email) return;
+                      setPwMagicSending(true);
+                      try {
+                        await authApi.requestMagicLink(user.email);
+                      } finally {
+                        setPwMagicSending(false);
+                        setPwMagicSent(true);
+                      }
+                    }}
+                  >
+                    {pwMagicSending ? 'Sending…' : 'Forgot your password? Send me a sign-in link instead.'}
+                  </button>
+                )}
+              </p>
             )}
           </div>
         )}

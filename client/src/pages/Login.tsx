@@ -287,6 +287,7 @@ export default function Login() {
                   <div className="text-right mt-1">
                     <button
                       type="button"
+                      aria-label="Forgot password? Switch to passwordless sign-in with magic link"
                       onClick={() => { setTab('magic'); setApiError(null); setSuccessMsg(null); }}
                       className="text-xs text-green-700 hover:text-green-600 font-medium"
                     >

@@ -710,28 +710,10 @@ export default function Landing() {
               tags={['Tesla API', 'Volkswagen We Connect', 'Nissan NissanConnect', 'BMW ConnectedDrive', 'Kia Connect', 'Polestar API']}
             />
             <ComingSoonCard
-              icon="⚡"
-              title="Smart Charge Scheduling"
-              desc="Tell Leccy when you need to leave and what state of charge you want. It will automatically schedule charging to make maximum use of your off-peak window, saving you money every single night."
-              tags={['Octopus Agile', 'Intelligent Octopus', 'Dynamic pricing', 'Solar surplus', 'Grid carbon intensity']}
-            />
-            <ComingSoonCard
-              icon="☀️"
-              title="Solar PV Integration"
-              desc="If you have solar panels, Leccy can track how much of your charging was free solar energy versus grid electricity. See your true zero-cost miles and optimise for sunny days."
-              tags={['SolarEdge', 'Givenergy', 'Growatt', 'SMA', 'Solis', 'Fronius']}
-            />
-            <ComingSoonCard
               icon="📱"
               title="Mobile App"
               desc="A native iOS and Android app so you can log a charge from the car park, see your stats on the go, and receive smart notifications when your overnight charge is complete or unusually expensive."
               tags={['iOS', 'Android', 'Push notifications', 'Widgets', 'Apple CarPlay']}
-            />
-            <ComingSoonCard
-              icon="🔌"
-              title="Public Charge Point Logging"
-              desc="Automatically detect when you've used a public charger (Osprey, bp pulse, Gridserve) via location services, and pre-populate the cost using the network's published tariff. No more receipt hunting."
-              tags={['bp pulse', 'Osprey', 'Gridserve', 'Pod Point', 'Char.gy', 'Ubitricity']}
             />
           </div>
 

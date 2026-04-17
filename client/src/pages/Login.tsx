@@ -284,6 +284,16 @@ export default function Login() {
                       {...regPw('password', { required: 'Password is required' })}
                     />
                     {pwErrors.password && <p role="alert" className="text-red-500 text-xs mt-1">{pwErrors.password.message}</p>}
+                  <div className="text-right mt-1">
+                    <button
+                      type="button"
+                      aria-label="Send a magic sign-in link to your email address"
+                      onClick={() => { setTab('magic'); setApiError(null); setSuccessMsg(null); }}
+                      className="text-xs text-green-700 hover:text-green-600 font-medium"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
                   </div>
 
                   <button
@@ -306,7 +316,7 @@ export default function Login() {
                     <input id="_hp_ml" type="text" autoComplete="off" tabIndex={-1} {...regMl('_hp')} />
                   </div>
 
-                  <p className="text-sm text-gray-500">Enter your email and we'll send you a one-click sign-in link. No password needed.</p>
+                  <p className="text-sm text-gray-500">Enter your email and we'll send you a one-click sign-in link — no password needed. You can also use this if you've forgotten your password.</p>
 
                   <div>
                     <label htmlFor="ml_email" className="block text-sm font-semibold text-gray-700 mb-1">Email</label>

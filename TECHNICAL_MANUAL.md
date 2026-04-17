@@ -202,7 +202,7 @@ Leccy is a full-stack TypeScript application composed of:
 }
 ```
 
-`enriched_sessions` is an array of per-session derived data used by the advanced analytics charts (see [Advanced Analytics](#advanced-analytics-v111)):</p>
+`enriched_sessions` is an array of per-session derived data used by the advanced analytics charts (see [Advanced Analytics](#advanced-analytics-v111)):
 
 | Field | Type | Description |
 |---|---|---|

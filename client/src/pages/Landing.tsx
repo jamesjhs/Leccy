@@ -328,25 +328,6 @@ function MockMaintenance() {
 }
 
 /* ─────────────────────────────────────────
-   TESTIMONIAL CARD
-───────────────────────────────────────── */
-function Testimonial({ name, car, quote, savings }: { name: string; car: string; quote: string; savings: string }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-lg border border-green-100 p-6 flex flex-col gap-3">
-      <div className="flex gap-1 text-amber-400 text-sm">{'★★★★★'}</div>
-      <p className="text-gray-700 text-sm leading-relaxed italic">"{quote}"</p>
-      <div className="mt-auto pt-3 border-t border-gray-100">
-        <div className="font-bold text-green-900 text-sm">{name}</div>
-        <div className="text-xs text-gray-500">{car}</div>
-        <div className="mt-1 inline-block bg-green-50 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">
-          {savings}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────
    FEATURE CARD
 ───────────────────────────────────────── */
 function FeatureCard({ icon, title, desc }: { icon: string; title: string; desc: string }) {
@@ -629,56 +610,6 @@ export default function Landing() {
                 <MockMaintenance />
               </BrowserFrame>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── TESTIMONIALS ── */}
-      <section className="py-20 px-4 bg-white">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-green-900 mb-4">EV drivers love Leccy</h2>
-            <p className="text-gray-600 text-lg max-w-xl mx-auto">
-              Real drivers, real cars, real savings.
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Testimonial
-              name="Sarah M."
-              car="Tesla Model 3 Long Range · Octopus Go"
-              quote="I had no idea my Model 3 was costing me 4.2p per mile until Leccy showed me. I've switched 90% of my charging to off-peak and I'm saving over £80 a month."
-              savings="£80/month saved"
-            />
-            <Testimonial
-              name="James T."
-              car="Nissan Leaf 40 kWh · E.ON Next Drive"
-              quote="The temperature vs range chart blew my mind. I can now predict my winter range accurately and I've stopped running out of charge on cold mornings."
-              savings="Zero range anxiety"
-            />
-            <Testimonial
-              name="Priya K."
-              car="Volkswagen ID.4 · British Gas EV"
-              quote="I used to keep a spreadsheet. Leccy does everything my spreadsheet did but in a fraction of the time, with better charts and no manual formulas."
-              savings="2 hrs/month saved"
-            />
-            <Testimonial
-              name="Daniel W."
-              car="Kia EV6 GT-Line · Intelligent Octopus"
-              quote="The multi-vehicle support is perfect. My wife and I each have an EV and we can finally see the total household charging spend together."
-              savings="Full family fleet view"
-            />
-            <Testimonial
-              name="Rachel O."
-              car="BMW iX · OVO Drive Anytime"
-              quote="Setting up the tariff config took two minutes. Now every charge is automatically costed — I just enter the battery percentage and Leccy handles the rest."
-              savings="Setup in 2 minutes"
-            />
-            <Testimonial
-              name="Mark H."
-              car="Polestar 2 · Octopus Agile"
-              quote="The maintenance log is a great touch. I can see that including service costs my total spend is still 40% cheaper than my old petrol car."
-              savings="40% cheaper than petrol"
-            />
           </div>
         </div>
       </section>

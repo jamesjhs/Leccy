@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import db from '../db/database';
 import { authenticate } from '../middleware/auth';
-import { validate, sessionSchema } from '../middleware/validate';
+import { validate, sessionSchema, sessionUpdateSchema } from '../middleware/validate';
 import { AuthenticatedRequest, ChargingSession } from '../types';
 
 const router = Router();
@@ -80,6 +80,72 @@ router.post('/', validate(sessionSchema), (req: Request, res: Response): void =>
     res.status(201).json({ session });
   } catch (err) {
     console.error('[sessions/POST]', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put('/:id', validate(sessionUpdateSchema), (req: Request, res: Response): void => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const sessionId = parseInt(req.params.id, 10);
+
+    if (!Number.isInteger(sessionId) || sessionId <= 0) {
+      res.status(400).json({ error: 'Invalid session ID' });
+      return;
+    }
+
+    const existing = db
+      .prepare(`SELECT * FROM charging_sessions WHERE id = ?`)
+      .get(sessionId) as ChargingSession | undefined;
+
+    if (!existing) {
+      res.status(404).json({ error: 'Session not found' });
+      return;
+    }
+
+    if (existing.user_id !== authReq.user!.userId && !authReq.user!.isAdmin) {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    const {
+      odometer_miles,
+      initial_battery_pct,
+      initial_range_miles,
+      final_battery_pct,
+      final_range_miles,
+      air_temp_celsius,
+      date_unplugged,
+    } = req.body as Partial<ChargingSession>;
+
+    db.prepare(
+      `UPDATE charging_sessions SET
+         odometer_miles    = COALESCE(?, odometer_miles),
+         initial_battery_pct = COALESCE(?, initial_battery_pct),
+         initial_range_miles = COALESCE(?, initial_range_miles),
+         final_battery_pct   = COALESCE(?, final_battery_pct),
+         final_range_miles   = COALESCE(?, final_range_miles),
+         air_temp_celsius    = COALESCE(?, air_temp_celsius),
+         date_unplugged      = COALESCE(?, date_unplugged)
+       WHERE id = ?`
+    ).run(
+      odometer_miles ?? null,
+      initial_battery_pct ?? null,
+      initial_range_miles ?? null,
+      final_battery_pct ?? null,
+      final_range_miles ?? null,
+      air_temp_celsius ?? null,
+      date_unplugged ?? null,
+      sessionId,
+    );
+
+    const updated = db
+      .prepare(`SELECT * FROM charging_sessions WHERE id = ?`)
+      .get(sessionId) as ChargingSession;
+
+    res.json({ session: updated });
+  } catch (err) {
+    console.error('[sessions/PUT]', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

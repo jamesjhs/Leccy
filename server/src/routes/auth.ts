@@ -13,6 +13,7 @@ import {
   magicLinkVerifySchema,
   changePasswordSchema,
   confirmPasswordSchema,
+  deleteAccountSchema,
   verify2faLoginSchema,
   setup2faSchema,
   verify2faSchema,
@@ -562,8 +563,44 @@ router.get('/me', authenticate, (req: Request, res: Response): void => {
 
 // ── GET /auth/version ──────────────────────────────────────────────────────────
 router.get('/version', (_req: Request, res: Response): void => {
-  const version = getSetting('APP_VERSION') || process.env.APP_VERSION || '0.0.1';
+  const version = getSetting('APP_VERSION') || process.env.APP_VERSION || '1.0.0';
   res.json({ version });
+});
+
+// ── DELETE /auth/account ───────────────────────────────────────────────────────
+// GDPR Article 17 – Right to erasure ("right to be forgotten")
+// Permanently deletes the authenticated user's account and all associated data.
+router.delete('/account', authenticate, validate(deleteAccountSchema), async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const { password } = req.body as { password: string };
+
+    const user = db.prepare(`SELECT * FROM users WHERE id = ?`).get(authReq.user!.userId) as User | undefined;
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    // Admins cannot self-delete via this endpoint to prevent accidental loss of access
+    if (user.is_admin === 1) {
+      res.status(403).json({ error: 'Admin accounts cannot be self-deleted. Ask another admin to remove the account.' });
+      return;
+    }
+
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
+      res.status(401).json({ error: 'Password is incorrect' });
+      return;
+    }
+
+    // Delete user — cascade rules in the schema handle all related data
+    db.prepare(`DELETE FROM users WHERE id = ?`).run(user.id);
+
+    res.json({ message: 'Account and all associated data have been permanently deleted.' });
+  } catch (err) {
+    console.error('[auth/delete-account]', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 export default router;

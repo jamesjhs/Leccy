@@ -26,11 +26,16 @@ interface VehicleForm {
   nickname: string;
 }
 
+interface DeleteAccountForm {
+  password: string;
+  confirm: string;
+}
+
 const inputClass =
   'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent';
 
 export default function AccountSettings() {
-  const { user } = useAuthContext();
+  const { user, logout } = useAuthContext();
 
   // Password change state
   const [pwSuccess, setPwSuccess] = useState<string | null>(null);
@@ -47,6 +52,9 @@ export default function AccountSettings() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [vehicleSuccess, setVehicleSuccess] = useState<string | null>(null);
   const [vehicleError, setVehicleError] = useState<string | null>(null);
+
+  // Delete account state
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const {
     register: regPw,
@@ -84,6 +92,15 @@ export default function AccountSettings() {
     reset: resetVehicle,
     formState: { errors: vehicleErrors, isSubmitting: vehicleSubmitting },
   } = useForm<VehicleForm>();
+
+  const {
+    register: regDelete,
+    handleSubmit: handleDeleteSubmit,
+    watch: watchDelete,
+    formState: { errors: deleteErrors, isSubmitting: deleteSubmitting },
+  } = useForm<DeleteAccountForm>();
+
+  const deleteConfirmValue = watchDelete('confirm', '');
 
   async function load() {
     try {
@@ -174,6 +191,22 @@ export default function AccountSettings() {
       await vehiclesApi.delete(id);
       void load();
     } catch {/* ignore */}
+  }
+
+  async function onDeleteAccount(data: DeleteAccountForm) {
+    setDeleteError(null);
+    if (data.confirm !== 'DELETE') {
+      setDeleteError('Please type DELETE (in capitals) to confirm.');
+      return;
+    }
+    try {
+      await authApi.deleteAccount(data.password);
+      // Clear local state and redirect to login
+      await logout();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to delete account. Please try again.';
+      setDeleteError(msg);
+    }
   }
 
   return (
@@ -390,6 +423,71 @@ export default function AccountSettings() {
             className="bg-green-700 hover:bg-green-600 disabled:bg-green-400 text-white font-bold px-5 py-2 rounded-lg text-sm transition-colors"
           >
             {vehicleSubmitting ? 'Adding…' : 'Add Vehicle'}
+          </button>
+        </form>
+      </section>
+
+      {/* Danger Zone — Delete Account */}
+      <section className="bg-white rounded-xl shadow-sm border border-red-200 p-6">
+        <h2 className="text-lg font-bold text-red-700 mb-2">⚠ Danger Zone</h2>
+        <h3 className="text-sm font-semibold text-red-600 mb-2">Delete My Account</h3>
+        <p className="text-sm text-gray-600 mb-1">
+          This will <strong>permanently and irreversibly</strong> delete your account and all
+          associated data, including charging sessions, charger costs, maintenance logs, tariff
+          configurations, and vehicles. This action cannot be undone.
+        </p>
+        <p className="text-sm text-gray-600 mb-4">
+          Under UK GDPR Article 17 (right to erasure) you are entitled to request deletion of your
+          data at any time. Submitting this form will action that request immediately.
+        </p>
+
+        {deleteError && (
+          <div className="bg-red-50 border border-red-300 text-red-700 rounded-lg px-4 py-3 mb-4 text-sm">
+            {deleteError}
+          </div>
+        )}
+
+        <form onSubmit={handleDeleteSubmit(onDeleteAccount)} className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
+              Enter your password to confirm
+            </label>
+            <input
+              type="password"
+              autoComplete="current-password"
+              placeholder="Your current password"
+              className={inputClass}
+              {...regDelete('password', { required: 'Password is required' })}
+            />
+            {deleteErrors.password && (
+              <p className="text-red-500 text-xs mt-1">{deleteErrors.password.message}</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
+              Type <code className="bg-gray-100 px-1 rounded">DELETE</code> to confirm
+            </label>
+            <input
+              type="text"
+              placeholder="DELETE"
+              autoComplete="off"
+              spellCheck={false}
+              className={inputClass}
+              {...regDelete('confirm', {
+                required: 'Please type DELETE to confirm',
+                validate: (v) => v === 'DELETE' || 'You must type DELETE in capitals',
+              })}
+            />
+            {deleteErrors.confirm && (
+              <p className="text-red-500 text-xs mt-1">{deleteErrors.confirm.message}</p>
+            )}
+          </div>
+          <button
+            type="submit"
+            disabled={deleteSubmitting || deleteConfirmValue !== 'DELETE'}
+            className="bg-red-600 hover:bg-red-500 disabled:bg-red-300 text-white font-bold px-5 py-2 rounded-lg text-sm transition-colors"
+          >
+            {deleteSubmitting ? 'Deleting…' : 'Permanently Delete My Account'}
           </button>
         </form>
       </section>

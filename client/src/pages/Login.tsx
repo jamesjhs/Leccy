@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useAuthContext } from '../App';
 import { authApi } from '../utils/api';
+import PublicFooter from '../components/PublicFooter';
 
 type Tab = 'password' | 'magic';
 
@@ -344,10 +345,9 @@ export default function Login() {
           )}
         </div>
 
-        <p className="text-green-400 text-xs text-center mt-6">
-          © J Rowson 2026 · jahosi.co.uk
-        </p>
+        <PublicFooter />
       </div>
     </div>
   );
 }
+

@@ -41,6 +41,8 @@ function initializeDatabase(): void {
       user_id INTEGER NOT NULL,
       licence_plate TEXT NOT NULL UNIQUE,
       nickname TEXT,
+      vehicle_type TEXT,
+      battery_kwh REAL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -66,6 +68,7 @@ function initializeDatabase(): void {
     CREATE TABLE IF NOT EXISTS charging_sessions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
+      vehicle_id INTEGER,
       odometer_miles REAL NOT NULL,
       initial_battery_pct REAL NOT NULL,
       initial_range_miles REAL NOT NULL,
@@ -74,7 +77,8 @@ function initializeDatabase(): void {
       air_temp_celsius REAL NOT NULL,
       date_unplugged TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS charger_costs (
@@ -93,11 +97,13 @@ function initializeDatabase(): void {
     CREATE TABLE IF NOT EXISTS maintenance_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
+      vehicle_id INTEGER,
       description TEXT NOT NULL,
       log_date TEXT NOT NULL,
       cost_pence INTEGER,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS tariff_config (
@@ -178,6 +184,31 @@ function runMigrations(): void {
   if (!tariffCols.includes('off_peak_start_time')) {
     db.exec(`ALTER TABLE tariff_config ADD COLUMN off_peak_start_time TEXT NOT NULL DEFAULT '00:00'`);
     console.log('[DB] Migration: added tariff_config.off_peak_start_time');
+  }
+
+  // Vehicle type and battery capacity columns
+  const vehicleCols = (db.pragma('table_info(vehicles)') as Array<{ name: string }>).map((c) => c.name);
+  if (!vehicleCols.includes('vehicle_type')) {
+    db.exec(`ALTER TABLE vehicles ADD COLUMN vehicle_type TEXT`);
+    console.log('[DB] Migration: added vehicles.vehicle_type');
+  }
+  if (!vehicleCols.includes('battery_kwh')) {
+    db.exec(`ALTER TABLE vehicles ADD COLUMN battery_kwh REAL`);
+    console.log('[DB] Migration: added vehicles.battery_kwh');
+  }
+
+  // vehicle_id on charging_sessions
+  const sessionCols = (db.pragma('table_info(charging_sessions)') as Array<{ name: string }>).map((c) => c.name);
+  if (!sessionCols.includes('vehicle_id')) {
+    db.exec(`ALTER TABLE charging_sessions ADD COLUMN vehicle_id INTEGER REFERENCES vehicles(id) ON DELETE SET NULL`);
+    console.log('[DB] Migration: added charging_sessions.vehicle_id');
+  }
+
+  // vehicle_id on maintenance_log
+  const maintCols = (db.pragma('table_info(maintenance_log)') as Array<{ name: string }>).map((c) => c.name);
+  if (!maintCols.includes('vehicle_id')) {
+    db.exec(`ALTER TABLE maintenance_log ADD COLUMN vehicle_id INTEGER REFERENCES vehicles(id) ON DELETE SET NULL`);
+    console.log('[DB] Migration: added maintenance_log.vehicle_id');
   }
 }
 

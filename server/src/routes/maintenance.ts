@@ -10,11 +10,19 @@ router.use(authenticate);
 router.get('/', (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const entries = db
-      .prepare(
-        `SELECT * FROM maintenance_log WHERE user_id = ? ORDER BY log_date DESC, created_at DESC`
-      )
-      .all(authReq.user!.userId) as MaintenanceLog[];
+    const { vehicleId } = req.query as { vehicleId?: string };
+
+    let query = `SELECT * FROM maintenance_log WHERE user_id = ?`;
+    const params: (string | number)[] = [authReq.user!.userId];
+
+    if (vehicleId) {
+      query += ` AND vehicle_id = ?`;
+      params.push(parseInt(vehicleId, 10));
+    }
+
+    query += ` ORDER BY log_date DESC, created_at DESC`;
+
+    const entries = db.prepare(query).all(...params) as MaintenanceLog[];
     res.json({ entries });
   } catch (err) {
     console.error('[maintenance/GET]', err);
@@ -25,17 +33,29 @@ router.get('/', (req: Request, res: Response): void => {
 router.post('/', validate(maintenanceSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const { description, log_date, cost_pence } = req.body as {
+    const { vehicle_id, description, log_date, cost_pence } = req.body as {
+      vehicle_id?: number | null;
       description: string;
       log_date: string;
       cost_pence?: number | null;
     };
 
+    // Verify vehicle belongs to the user if provided
+    if (vehicle_id) {
+      const vehicle = db
+        .prepare(`SELECT id FROM vehicles WHERE id = ? AND user_id = ?`)
+        .get(vehicle_id, authReq.user!.userId);
+      if (!vehicle) {
+        res.status(404).json({ error: 'Vehicle not found' });
+        return;
+      }
+    }
+
     const result = db
       .prepare(
-        `INSERT INTO maintenance_log (user_id, description, log_date, cost_pence) VALUES (?, ?, ?, ?)`
+        `INSERT INTO maintenance_log (user_id, vehicle_id, description, log_date, cost_pence) VALUES (?, ?, ?, ?, ?)`
       )
-      .run(authReq.user!.userId, description, log_date, cost_pence ?? null);
+      .run(authReq.user!.userId, vehicle_id ?? null, description, log_date, cost_pence ?? null);
 
     const entry = db
       .prepare(`SELECT * FROM maintenance_log WHERE id = ?`)

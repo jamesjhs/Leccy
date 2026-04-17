@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { MiniLineChart, MiniBarChart, MiniScatterChart } from '../charts';
-import { analyticsApi, AnalyticsResult } from '../utils/api';
+import { analyticsApi, vehiclesApi, AnalyticsResult, Vehicle } from '../utils/api';
 
 type Period = 'week' | 'month' | 'all' | 'custom';
 
@@ -24,17 +24,32 @@ export default function Analytics() {
   const [period, setPeriod] = useState<Period>('all');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [data, setData] = useState<AnalyticsResult | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadVehicles() {
+      try {
+        const res = await vehiclesApi.getAll();
+        setVehicles(res.data.vehicles);
+      } catch {/* ignore */}
+    }
+    void loadVehicles();
+  }, []);
 
   async function load() {
     setLoading(true);
     try {
-      let params: { startDate?: string; endDate?: string } = {};
+      let params: { startDate?: string; endDate?: string; vehicleId?: number } = {};
       if (period === 'custom') {
         params = { startDate: customStart || undefined, endDate: customEnd || undefined };
       } else {
         params = getDateRange(period);
+      }
+      if (selectedVehicleId !== null) {
+        params.vehicleId = selectedVehicleId;
       }
       const res = await analyticsApi.get(params);
       setData(res.data);
@@ -46,7 +61,7 @@ export default function Analytics() {
   useEffect(() => {
     if (period !== 'custom') void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period]);
+  }, [period, selectedVehicleId]);
 
   const periodButtons: { key: Period; label: string }[] = [
     { key: 'week', label: 'This Week' },
@@ -58,6 +73,35 @@ export default function Analytics() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-green-900 mb-6">Analytics</h1>
+
+      {/* Vehicle selector */}
+      {vehicles.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            onClick={() => setSelectedVehicleId(null)}
+            className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors border ${
+              selectedVehicleId === null
+                ? 'bg-green-700 text-white border-green-700'
+                : 'bg-white text-green-700 border-green-300 hover:bg-green-50'
+            }`}
+          >
+            All Vehicles
+          </button>
+          {vehicles.map((v) => (
+            <button
+              key={v.id}
+              onClick={() => setSelectedVehicleId(v.id)}
+              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors border ${
+                selectedVehicleId === v.id
+                  ? 'bg-green-700 text-white border-green-700'
+                  : 'bg-white text-green-700 border-green-300 hover:bg-green-50'
+              }`}
+            >
+              🚗 {v.nickname ? `${v.nickname} (${v.licence_plate})` : v.licence_plate}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Period selector */}
       <div className="flex flex-wrap gap-2 mb-4">

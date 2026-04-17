@@ -90,7 +90,8 @@ export const authApi = {
 
 // ---------- Sessions ----------
 export const sessionsApi = {
-  getAll: () => api.get<{ sessions: ChargingSession[] }>('/sessions'),
+  getAll: (vehicleId?: number) =>
+    api.get<{ sessions: ChargingSession[] }>('/sessions', { params: vehicleId ? { vehicleId } : undefined }),
   create: (data: NewSession) => api.post<{ session: ChargingSession }>('/sessions', data),
   delete: (id: number) => api.delete(`/sessions/${id}`),
 };
@@ -106,7 +107,8 @@ export const chargerApi = {
 
 // ---------- Maintenance ----------
 export const maintenanceApi = {
-  getAll: () => api.get<{ entries: MaintenanceLog[] }>('/maintenance'),
+  getAll: (vehicleId?: number) =>
+    api.get<{ entries: MaintenanceLog[] }>('/maintenance', { params: vehicleId ? { vehicleId } : undefined }),
   create: (data: NewMaintenance) => api.post<{ entry: MaintenanceLog }>('/maintenance', data),
   delete: (id: number) => api.delete(`/maintenance/${id}`),
 };
@@ -122,7 +124,7 @@ export const tariffApi = {
 
 // ---------- Analytics ----------
 export const analyticsApi = {
-  get: (params?: { startDate?: string; endDate?: string }) =>
+  get: (params?: { startDate?: string; endDate?: string; vehicleId?: number }) =>
     api.get<AnalyticsResult>('/analytics', { params }),
 };
 
@@ -157,17 +159,22 @@ export interface Vehicle {
   user_id: number;
   licence_plate: string;
   nickname: string | null;
+  vehicle_type: string | null;
+  battery_kwh: number | null;
   created_at: string;
 }
 
 export interface NewVehicle {
   licence_plate: string;
   nickname?: string;
+  vehicle_type?: string;
+  battery_kwh?: number | null;
 }
 
 export interface ChargingSession {
   id: number;
   user_id: number;
+  vehicle_id: number | null;
   odometer_miles: number;
   initial_battery_pct: number;
   initial_range_miles: number;
@@ -179,6 +186,7 @@ export interface ChargingSession {
 }
 
 export interface NewSession {
+  vehicle_id?: number | null;
   odometer_miles: number;
   initial_battery_pct: number;
   initial_range_miles: number;
@@ -215,6 +223,7 @@ export interface NewChargerCost {
 export interface MaintenanceLog {
   id: number;
   user_id: number;
+  vehicle_id: number | null;
   description: string;
   log_date: string;
   cost_pence: number | null;
@@ -222,6 +231,7 @@ export interface MaintenanceLog {
 }
 
 export interface NewMaintenance {
+  vehicle_id?: number | null;
   description: string;
   log_date: string;
   cost_pence?: number | null;

@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker v1.0.4: Technical Manual
+# Leccy — EV Cost Tracker v1.1.1: Technical Manual
 
 ## Architecture Overview
 
@@ -197,9 +197,25 @@ Leccy is a full-stack TypeScript application composed of:
   "efficiency_data": [...],
   "cost_per_session": [...],
   "temp_vs_range": [...],
-  "miles_per_pct": [...]
+  "miles_per_pct": [...],
+  "enriched_sessions": [...]
 }
 ```
+
+`enriched_sessions` is an array of per-session derived data used by the advanced analytics charts (see [Advanced Analytics](#advanced-analytics-v111)):
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | number | Session ID |
+| `date` | string | ISO date unplugged |
+| `odometer` | number | Odometer reading (miles) |
+| `max_range_100_pct` | number | Projected range at 100% SOC (miles) |
+| `end_charge_temperature` | number | Air temperature at time of charging (°C) |
+| `energy_kwh` | number | Energy added (kWh, 0 if no charger cost logged) |
+| `initial_battery_percent` | number | State of charge when plugged in (%) |
+| `pct_charged` | number | Percentage points added during this session |
+| `distance_driven` | number \| null | Actual miles driven since previous session |
+| `estimated_range_consumed` | number \| null | GOM estimated range consumed since previous session |
 
 ### Admin — `/api/admin` (admin only)
 
@@ -212,6 +228,63 @@ Leccy is a full-stack TypeScript application composed of:
 | PUT | `/settings` | Update settings |
 | POST | `/2fa/setup` | Setup 2FA |
 | POST | `/2fa/verify` | Verify 2FA code |
+
+---
+
+## Advanced Analytics (v1.1.1)
+
+Five additional insight charts are derived from `enriched_sessions` data returned by `GET /api/analytics`. All computation is done in the React layer from the data already fetched.
+
+### Chart 1 — Battery Health Proxy
+
+| Property | Value |
+|---|---|
+| Chart type | Line / Scatter with linear trendline |
+| X-axis | `odometer` (miles) |
+| Y-axis | `max_range_100_pct` — projected full-charge range, calculated as `final_range_miles / final_battery_pct × 100` |
+| Y-axis scale | Dynamic min/max (does not start at 0) so degradation is visible |
+| Trendline | Least-squares linear regression drawn as a dashed overlay |
+| Tooltip | Odometer, date, max range at 100% |
+
+### Chart 2 — Thermal Impact on Charging
+
+| Property | Value |
+|---|---|
+| Chart type | Scatter |
+| X-axis | `end_charge_temperature` (°C) |
+| Y-axis | `energy_kwh` (kWh added per session) |
+| Point opacity | Scales with `initial_battery_percent` (low SOC = more transparent) |
+| Tooltip | Temperature, energy added, starting battery % |
+
+### Chart 3 — GOM Accuracy: Estimated vs Real Range
+
+| Property | Value |
+|---|---|
+| Chart type | Scatter |
+| X-axis | `estimated_range_consumed` — GOM predicted miles used (prev `final_range_miles` − cur `initial_range_miles`) |
+| Y-axis | `distance_driven` — actual odometer difference between consecutive sessions |
+| Reference line | Diagonal from (0,0) to (max, max) represents perfect 1:1 accuracy |
+| Summary badge | Avg GOM ratio = Σ `distance_driven` / Σ `estimated_range_consumed` shown above chart |
+| Tooltip | Date, GOM estimate, actual miles |
+
+### Chart 4 — Range Anxiety Gauge
+
+| Property | Value |
+|---|---|
+| Chart type | Histogram (bar) |
+| X-axis | `initial_battery_percent` binned into 10-point groups (0–9%, 10–19%, …, 90–100%) |
+| Y-axis | Session count per bin |
+| Bar colour | Orange/red for bins below 20%, teal/green for 20% and above |
+| Median marker | Dashed vertical line annotated with the median `initial_battery_percent` |
+
+### Chart 5 — Charging Habits by Day
+
+| Property | Value |
+|---|---|
+| Chart type | Bar |
+| X-axis | Day of week, explicitly ordered Monday → Sunday |
+| Y-axis | Total session count per day |
+| Hover tooltip | Sessions, avg kWh added, avg % charged for that day |
 
 ---
 
@@ -319,7 +392,7 @@ server {
 
 ## Progressive Web App (PWA)
 
-Leccy v1.0.4 ships as a fully installable PWA. The following files drive this:
+Leccy v1.1.1 ships as a fully installable PWA. The following files drive this:
 
 | File | Purpose |
 |---|---|

@@ -495,18 +495,18 @@ export default function Landing() {
             />
             <FeatureCard
               icon="🔋"
-              title="Battery Efficiency Tracking"
-              desc="Log your battery percentage before and after each trip. Leccy plots your efficiency over time so you can spot degradation early."
+              title="Battery Health Tracking"
+              desc="Monitor your battery's projected full-charge range against odometer readings. A built-in trendline reveals real-world degradation over time — before it becomes a problem."
+            />
+            <FeatureCard
+              icon="🧭"
+              title="GOM Accuracy & Range Insights"
+              desc="Find out how accurate your car's range estimate really is. The GOM Accuracy chart plots estimated vs actual miles driven, and the Range Anxiety Gauge shows how low you let the battery get before charging."
             />
             <FeatureCard
               icon="🔧"
               title="Maintenance Log"
               desc="Keep MOT, service, and tyre records alongside your charging history — your complete EV running cost in one place."
-            />
-            <FeatureCard
-              icon="⚡"
-              title="Real-Time Cost Estimates"
-              desc="As you fill in a charging session, Leccy instantly estimates the cost based on your tariff — before you even save the record."
             />
           </div>
         </div>
@@ -542,8 +542,9 @@ export default function Landing() {
                 <span className="inline-block bg-green-700 text-white text-xs font-bold px-3 py-1 rounded-full mb-2">Analytics</span>
                 <h3 className="text-xl font-bold text-green-900">Powerful charging insights</h3>
                 <p className="text-gray-600 text-sm mt-1">
-                  Interactive charts showing cost per session, battery efficiency over time, and how cold weather
-                  affects your real-world range. Filter by week, month, or custom range.
+                  Interactive charts covering cost per session, battery efficiency, GOM accuracy,
+                  thermal impact, range anxiety patterns, and weekly charging habits — with a battery
+                  health trendline that shows degradation over time.
                 </p>
               </div>
               <BrowserFrame title="analytics">

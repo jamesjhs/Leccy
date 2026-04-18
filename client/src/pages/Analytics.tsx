@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
-import { MiniLineChart, MiniBarChart, MiniScatterChart } from '../charts';
+import {
+  MiniLineChart, MiniBarChart, MiniScatterChart,
+  BatteryHealthChart, ThermalImpactChart, GOMAccuracyChart,
+  RangeAnxietyChart, ChargingHabitsChart,
+} from '../charts';
 import { analyticsApi, vehiclesApi, AnalyticsResult, Vehicle } from '../utils/api';
 
 type Period = 'week' | 'month' | 'all' | 'custom';
@@ -214,6 +218,78 @@ export default function Analytics() {
               Not enough data to display charts yet. Add sessions with charger costs to see analytics.
             </div>
           )}
+
+          {/* ── Advanced Analytics ─────────────────────────────── */}
+          {data.enriched_sessions && data.enriched_sessions.length > 0 && (() => {
+            const es = data.enriched_sessions;
+
+            // Chart 1: Battery Health Proxy
+            const batteryHealthData = es
+              .filter(s => s.max_range_100_pct > 0)
+              .map(s => ({ odometer: s.odometer, date: s.date, max_range_100_pct: s.max_range_100_pct }));
+
+            // Chart 2: Thermal Impact
+            const thermalData = es
+              .filter(s => s.energy_kwh > 0)
+              .map(s => ({
+                end_charge_temperature: s.end_charge_temperature,
+                energy_kwh: s.energy_kwh,
+                initial_battery_percent: s.initial_battery_percent,
+              }));
+
+            // Chart 3: GOM Accuracy
+            const gomData = es
+              .filter(s => s.distance_driven != null && s.distance_driven > 0 && s.estimated_range_consumed != null && s.estimated_range_consumed > 0)
+              .map(s => ({
+                estimated_range_consumed: s.estimated_range_consumed!,
+                distance_driven: s.distance_driven!,
+                date: s.date,
+              }));
+
+            // Chart 4: Range Anxiety
+            const anxietyData = es.map(s => s.initial_battery_percent);
+
+            // Chart 5: Charging Habits
+            const habitsData = es.map(s => ({
+              date: s.date,
+              energy_kwh: s.energy_kwh,
+              pct_charged: s.pct_charged,
+            }));
+
+            return (
+              <>
+                {batteryHealthData.length >= 2 && (
+                  <ChartCard title="Battery Health Proxy">
+                    <BatteryHealthChart data={batteryHealthData} height={280} />
+                  </ChartCard>
+                )}
+
+                {thermalData.length > 0 && (
+                  <ChartCard title="Thermal Impact on Charging">
+                    <ThermalImpactChart data={thermalData} height={280} />
+                  </ChartCard>
+                )}
+
+                {gomData.length > 0 && (
+                  <ChartCard title="GOM Accuracy: Estimated vs Real Range">
+                    <GOMAccuracyChart data={gomData} height={300} />
+                  </ChartCard>
+                )}
+
+                {anxietyData.length > 0 && (
+                  <ChartCard title="Range Anxiety Gauge">
+                    <RangeAnxietyChart data={anxietyData} height={280} />
+                  </ChartCard>
+                )}
+
+                {habitsData.length > 0 && (
+                  <ChartCard title="Charging Habits by Day">
+                    <ChargingHabitsChart data={habitsData} height={280} />
+                  </ChartCard>
+                )}
+              </>
+            );
+          })()}
         </>
       )}
     </div>

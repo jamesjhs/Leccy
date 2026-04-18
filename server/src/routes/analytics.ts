@@ -9,6 +9,7 @@ import {
   CostPerSession,
   TempVsRange,
   MilesPerPct,
+  EnrichedSession,
 } from '../types';
 
 const router = Router();
@@ -131,6 +132,48 @@ router.get('/', validateQuery(analyticsQuerySchema), (req: Request, res: Respons
 
     const costPerMile = totalMiles > 0 ? totalCostPence / totalMiles : 0;
 
+    // Build enriched sessions (sorted by date then odometer for GOM pairing)
+    const sortedForEnrich = [...sessions].sort(
+      (a, b) =>
+        new Date(a.date_unplugged).getTime() - new Date(b.date_unplugged).getTime() ||
+        a.odometer_miles - b.odometer_miles,
+    );
+
+    const enrichedSessions: EnrichedSession[] = sortedForEnrich.map((s, i) => {
+      const maxRange100 =
+        s.final_battery_pct > 0
+          ? Math.round((s.final_range_miles / s.final_battery_pct) * 100 * 10) / 10
+          : 0;
+
+      let distanceDriven: number | null = null;
+      let estimatedRangeConsumed: number | null = null;
+
+      if (i > 0) {
+        const prev = sortedForEnrich[i - 1];
+        const odometerDiff = s.odometer_miles - prev.odometer_miles;
+        if (odometerDiff > 0) {
+          distanceDriven = Math.round(odometerDiff * 10) / 10;
+          const gomEstimate = prev.final_range_miles - s.initial_range_miles;
+          if (gomEstimate > 0) {
+            estimatedRangeConsumed = Math.round(gomEstimate * 10) / 10;
+          }
+        }
+      }
+
+      return {
+        id: s.id,
+        date: s.date_unplugged,
+        odometer: s.odometer_miles,
+        max_range_100_pct: maxRange100,
+        end_charge_temperature: s.air_temp_celsius,
+        energy_kwh: s.energy_kwh ?? 0,
+        initial_battery_percent: s.initial_battery_pct,
+        pct_charged: s.final_battery_pct - s.initial_battery_pct,
+        distance_driven: distanceDriven,
+        estimated_range_consumed: estimatedRangeConsumed,
+      };
+    });
+
     const result: AnalyticsResult = {
       total_cost_pence: totalCostPence,
       cost_per_mile_pence: Math.round(costPerMile * 100) / 100,
@@ -141,6 +184,7 @@ router.get('/', validateQuery(analyticsQuerySchema), (req: Request, res: Respons
       cost_per_session: costPerSession,
       temp_vs_range: tempVsRange,
       miles_per_pct: milesPerPct,
+      enriched_sessions: enrichedSessions,
     };
 
     res.json(result);

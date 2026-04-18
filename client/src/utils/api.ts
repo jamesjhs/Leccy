@@ -284,6 +284,20 @@ export interface AnalyticsResult {
   cost_per_session: CostPerSession[];
   temp_vs_range: TempVsRange[];
   miles_per_pct: MilesPerPct[];
+  enriched_sessions: EnrichedSession[];
+}
+
+export interface EnrichedSession {
+  id: number;
+  date: string;
+  odometer: number;
+  max_range_100_pct: number;
+  end_charge_temperature: number;
+  energy_kwh: number;
+  initial_battery_percent: number;
+  pct_charged: number;
+  distance_driven: number | null;
+  estimated_range_consumed: number | null;
 }
 
 export interface EfficiencyPoint {

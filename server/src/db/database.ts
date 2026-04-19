@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
+import pkg from '../../package.json';
 
 dotenv.config();
 
@@ -134,8 +135,8 @@ function initializeDatabase(): void {
   // Run column migrations for existing databases
   runMigrations();
 
-  // Seed APP_VERSION
-  const version = process.env.APP_VERSION || '1.1.0';
+  // Seed APP_VERSION from package.json (single source of truth)
+  const version = pkg.version;
   const upsertVersion = db.prepare(
     `INSERT INTO app_settings (key, value) VALUES ('APP_VERSION', ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`

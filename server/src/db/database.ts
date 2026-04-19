@@ -180,7 +180,7 @@ function runMigrations(): void {
   // was later updated to TEXT UNIQUE (nullable) but existing databases kept the old
   // constraint, causing every admin user-creation attempt to fail with a 500 error.
   const licencePlateInfo = userColsInfo.find((c) => c.name === 'licence_plate');
-  if (licencePlateInfo && licencePlateInfo.notnull === 1) {
+  if (licencePlateInfo?.notnull === 1) {
     // SQLite does not support DROP CONSTRAINT; the standard workaround is to
     // rebuild the table. Foreign-key enforcement must be disabled during the
     // rename/copy/drop sequence and re-enabled afterwards.

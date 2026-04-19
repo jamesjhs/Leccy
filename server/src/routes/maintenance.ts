@@ -17,7 +17,7 @@ router.get('/', (req: Request, res: Response): void => {
 
     if (vehicleId !== undefined) {
       const vid = parseInt(vehicleId, 10);
-      if (!Number.isInteger(vid) || vid <= 0) {
+      if (isNaN(vid) || vid <= 0) {
         res.status(400).json({ error: 'Invalid vehicle ID' });
         return;
       }

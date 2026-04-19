@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import PrivacyPolicy from './PrivacyPolicy';
 import UserManual from './UserManual';
-
-const APP_VERSION = '1.0.3';
+import { APP_VERSION } from '../version';
 
 export default function Footer() {
   const [showPolicy, setShowPolicy] = useState(false);

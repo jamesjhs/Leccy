@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import hpp from 'hpp';
 import path from 'path';
 import rateLimit from 'express-rate-limit';
+import { version as APP_VERSION } from '../package.json';
 
 import authRoutes from './routes/auth';
 import sessionsRoutes from './routes/sessions';
@@ -91,6 +92,11 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please try again later.' },
+});
+
+// ─── Heartbeat ─────────────────────────────────────────────────────────────────
+app.get('/readyz', (_req, res) => {
+  res.json({ ok: true, service: 'leccy', version: APP_VERSION, timestamp: new Date().toISOString() });
 });
 
 // ─── API routes ────────────────────────────────────────────────────────────────

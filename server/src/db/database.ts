@@ -135,7 +135,7 @@ function initializeDatabase(): void {
   runMigrations();
 
   // Seed APP_VERSION
-  const version = process.env.APP_VERSION || '1.0.4';
+  const version = process.env.APP_VERSION || '1.0.5';
   const upsertVersion = db.prepare(
     `INSERT INTO app_settings (key, value) VALUES ('APP_VERSION', ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`
@@ -156,6 +156,36 @@ function initializeDatabase(): void {
 }
 
 function runMigrations(): void {
+  // ── Recovery: v1.0.4 migration left dangling FK references ────────────────────
+  // The v1.0.4 migration used `ALTER TABLE users RENAME TO users_v103`. Modern
+  // SQLite (≥ 3.26.0, bundled with better-sqlite3 9.x) rewrites FK clauses in
+  // every child table to reference the new name — even when foreign_keys = OFF —
+  // unless `PRAGMA legacy_alter_table = ON` is set. After users_v103 was dropped,
+  // all child tables (vehicles, charging_sessions, etc.) had dangling FK references,
+  // causing SQLITE_ERROR "no such table: main.users_v103" on any FK-touching query.
+  // Fix: detect affected tables via sqlite_master and patch them back to 'users',
+  // then bump schema_version so SQLite discards its in-memory schema cache.
+  const staleRefs = (
+    db.prepare(`SELECT count(*) AS cnt FROM sqlite_master WHERE sql LIKE '%users_v103%'`)
+      .get() as { cnt: number }
+  ).cnt;
+  if (staleRefs > 0) {
+    db.pragma('writable_schema = ON');
+    db.exec(
+      `UPDATE sqlite_master
+         SET sql = REPLACE(sql, 'users_v103', 'users')
+         WHERE type IN ('table', 'index', 'trigger', 'view')
+           AND sql LIKE '%users_v103%'`,
+    );
+    db.pragma('writable_schema = OFF');
+    // Bump schema_version so SQLite re-parses all cached table definitions on
+    // the next statement preparation.
+    const sv = (db.pragma('schema_version') as Array<{ schema_version: number }>)[0]
+      .schema_version;
+    db.pragma(`schema_version = ${sv + 1}`);
+    console.log('[DB] Recovery: repaired broken FK references to dropped users_v103 table');
+  }
+
   // Read full column info (including notnull flag) so we can detect constraint issues
   const userColsInfo = db.pragma('table_info(users)') as Array<{ name: string; notnull: number }>;
   const userCols = userColsInfo.map((c) => c.name);
@@ -184,7 +214,12 @@ function runMigrations(): void {
     // SQLite does not support DROP CONSTRAINT; the standard workaround is to
     // rebuild the table. Foreign-key enforcement must be disabled during the
     // rename/copy/drop sequence and re-enabled afterwards.
+    // IMPORTANT: legacy_alter_table must be ON so that modern SQLite (≥ 3.26.0)
+    // does NOT rewrite FK references in child tables when we rename users to
+    // users_v103. Without it, child tables would reference users_v103 which is
+    // immediately dropped, causing SQLITE_ERROR on the next FK-touching query.
     db.pragma('foreign_keys = OFF');
+    db.pragma('legacy_alter_table = ON');
     const migrateUsersTable = db.transaction(() => {
       db.exec(`ALTER TABLE users RENAME TO users_v103`);
       db.exec(`
@@ -217,6 +252,7 @@ function runMigrations(): void {
       `);
     });
     migrateUsersTable();
+    db.pragma('legacy_alter_table = OFF');
     db.pragma('foreign_keys = ON');
     console.log('[DB] Migration: removed NOT NULL from users.licence_plate (v1.0.3 → v1.0.4)');
   }

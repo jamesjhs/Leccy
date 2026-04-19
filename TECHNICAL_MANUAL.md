@@ -427,6 +427,42 @@ Example: £1.23 is stored as `123` pence.
 
 ## Changelog
 
+### v1.0.5
+
+**Bug fix — adding a vehicle (or any data) gives "no such table: main.users_v103"**
+
+The v1.0.4 migration used `ALTER TABLE users RENAME TO users_v103` without
+`PRAGMA legacy_alter_table = ON`. Modern SQLite (≥ 3.26.0, bundled with
+better-sqlite3 9.x) rewrites foreign key clauses in every child table to reference
+the new name even when `PRAGMA foreign_keys = OFF`. After `users_v103` was then
+dropped, all child tables (`vehicles`, `charging_sessions`, `charger_costs`,
+`maintenance_log`, `tariff_config`, `magic_link_tokens`, `user_2fa`, `admin_2fa`)
+held dangling `REFERENCES users_v103(id)` constraints. Any INSERT/UPDATE on those
+tables triggered SQLite FK validation, which failed with:
+
+```
+SqliteError: no such table: main.users_v103
+```
+
+**Fixes:**
+
+1. **Recovery migration** — `runMigrations()` now detects stale `users_v103`
+   references in `sqlite_master`. If found, it uses `PRAGMA writable_schema = ON`
+   to patch every affected table/index definition back to `REFERENCES users(id)`,
+   then bumps `schema_version` by 1 so SQLite discards its cached schema and
+   re-parses all definitions on the next statement preparation. This runs
+   automatically on server start and is idempotent.
+
+2. **Forward migration hardened** — the `licence_plate NOT NULL` migration (which
+   only runs on databases that still have the old constraint) now sets
+   `PRAGMA legacy_alter_table = ON` before renaming and restores it afterwards,
+   preventing the child-table FK rewrite on any remaining un-migrated databases.
+
+3. **vehicleId query param validation** — `GET /api/sessions` and
+   `GET /api/maintenance` now validate the optional `vehicleId` query parameter
+   and return `400 Bad Request` when it is not a positive integer, rather than
+   passing `NaN` to SQLite (which caused a 500 error).
+
 ### v1.0.4
 
 **Bug fix — admin user creation returning 500**
@@ -448,3 +484,5 @@ SQLite's standard rename → recreate → copy → drop pattern, with `PRAGMA fo
 during the operation to avoid constraint errors on child tables. After the migration the new
 table definition matches the `CREATE TABLE` in the source, and `licence_plate` is correctly
 nullable. All existing data is preserved.
+
+*(Note: this migration had a regression in its initial release — see v1.0.5 above.)*

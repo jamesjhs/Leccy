@@ -41,11 +41,14 @@ Leccy is a full-stack TypeScript application composed of:
 | Column | Type | Notes |
 |---|---|---|
 | `id` | INTEGER PK | Auto-increment |
-| `licence_plate` | TEXT UNIQUE | Stored uppercase |
-| `password_hash` | TEXT | bcryptjs, saltRounds: 12 |
-| `is_admin` | INTEGER | 0 or 1 |
-| `email` | TEXT | Nullable |
-| `created_at` | TEXT | ISO datetime |
+| `licence_plate` | TEXT UNIQUE | Optional; uppercase; NULL for email-only users |
+| `password_hash` | TEXT NOT NULL | bcryptjs, saltRounds: 12 |
+| `is_admin` | INTEGER NOT NULL | 0 or 1 |
+| `email` | TEXT | Nullable; unique (partial index, non-null only) |
+| `display_name` | TEXT | Nullable; optional friendly name |
+| `failed_login_attempts` | INTEGER NOT NULL | Default 0; increments on bad password |
+| `locked_until` | TEXT | Nullable; ISO datetime; account lockout expiry |
+| `created_at` | TEXT NOT NULL | ISO datetime |
 
 ### `charging_sessions`
 | Column | Type | Notes |
@@ -116,7 +119,7 @@ Leccy is a full-stack TypeScript application composed of:
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/login` | No | Login with licence_plate + password. Returns JWT. |
+| POST | `/login` | No | Login with email + password. Returns JWT. |
 | POST | `/logout` | No | Client-side token removal; invalidates session. |
 | GET | `/me` | Yes | Return current user info. |
 | GET | `/version` | No | Return APP_VERSION. |
@@ -406,7 +409,7 @@ Leccy v1.1.1 ships as a fully installable PWA. The following files drive this:
 - **Navigation requests** (`mode === 'navigate'`): serve the cached SPA shell (`/`) so the app loads offline after the first visit.
 - **`/api/*` requests**: network-first; returns a JSON `503` error response when offline.
 - **All other static assets**: cache-first, populating the cache on the first fetch.
-- Cache is versioned (`leccy-1.0.4`); old caches are purged on activation.
+- Cache is versioned (`leccy-1.1.0`); old caches are purged on activation.
 
 ### Content-Security-Policy
 
@@ -419,3 +422,71 @@ The server's Helmet CSP includes `worker-src 'self'` to allow the service worker
 All monetary values are stored and transmitted as **integer pence** (1/100 of a pound) to avoid floating-point precision issues. The UI converts to/from pounds (£) for display.
 
 Example: £1.23 is stored as `123` pence.
+
+---
+
+## Changelog
+
+### v1.1.0
+
+Version bump incorporating all fixes from v1.0.4 and v1.0.5. No new features in this release.
+
+### v1.0.5
+
+**Bug fix — adding a vehicle (or any data) gives "no such table: main.users_v103"**
+
+The v1.0.4 migration used `ALTER TABLE users RENAME TO users_v103` without
+`PRAGMA legacy_alter_table = ON`. Modern SQLite (≥ 3.26.0, bundled with
+better-sqlite3 9.x) rewrites foreign key clauses in every child table to reference
+the new name even when `PRAGMA foreign_keys = OFF`. After `users_v103` was then
+dropped, all child tables (`vehicles`, `charging_sessions`, `charger_costs`,
+`maintenance_log`, `tariff_config`, `magic_link_tokens`, `user_2fa`, `admin_2fa`)
+held dangling `REFERENCES users_v103(id)` constraints. Any INSERT/UPDATE on those
+tables triggered SQLite FK validation, which failed with:
+
+```
+SqliteError: no such table: main.users_v103
+```
+
+**Fixes:**
+
+1. **Recovery migration** — `runMigrations()` now detects stale `users_v103`
+   references in `sqlite_master`. If found, it uses `PRAGMA writable_schema = ON`
+   to patch every affected table/index definition back to `REFERENCES users(id)`,
+   then bumps `schema_version` by 1 so SQLite discards its cached schema and
+   re-parses all definitions on the next statement preparation. This runs
+   automatically on server start and is idempotent.
+
+2. **Forward migration hardened** — the `licence_plate NOT NULL` migration (which
+   only runs on databases that still have the old constraint) now sets
+   `PRAGMA legacy_alter_table = ON` before renaming and restores it afterwards,
+   preventing the child-table FK rewrite on any remaining un-migrated databases.
+
+3. **vehicleId query param validation** — `GET /api/sessions` and
+   `GET /api/maintenance` now validate the optional `vehicleId` query parameter
+   and return `400 Bad Request` when it is not a positive integer, rather than
+   passing `NaN` to SQLite (which caused a 500 error).
+
+### v1.0.4
+
+**Bug fix — admin user creation returning 500**
+
+The `users.licence_plate` column was originally created as `TEXT NOT NULL UNIQUE`. When support
+for email-only (admin-created) users was added, the `CREATE TABLE` definition was updated to
+`TEXT UNIQUE` (nullable), but no database migration was written to drop the `NOT NULL` constraint
+from existing databases. Consequently, every call to `POST /api/admin/users` failed with:
+
+```
+SqliteError: NOT NULL constraint failed: users.licence_plate
+```
+
+which was caught by the route's `try/catch` and returned as a generic 500 response.
+
+**Fix:** `runMigrations()` now detects whether `licence_plate` carries a `NOT NULL` constraint
+(via `PRAGMA table_info(users)`). If it does, the function rebuilds the `users` table using
+SQLite's standard rename → recreate → copy → drop pattern, with `PRAGMA foreign_keys = OFF`
+during the operation to avoid constraint errors on child tables. After the migration the new
+table definition matches the `CREATE TABLE` in the source, and `licence_plate` is correctly
+nullable. All existing data is preserved.
+
+*(Note: this migration had a regression in its initial release — see v1.0.5 above.)*

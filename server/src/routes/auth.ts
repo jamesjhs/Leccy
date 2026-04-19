@@ -563,7 +563,7 @@ router.get('/me', authenticate, (req: Request, res: Response): void => {
 
 // ── GET /auth/version ──────────────────────────────────────────────────────────
 router.get('/version', (_req: Request, res: Response): void => {
-  const version = getSetting('APP_VERSION') || process.env.APP_VERSION || '1.0.0';
+  const version = getSetting('APP_VERSION') || '0.0.1';
   res.json({ version });
 });
 

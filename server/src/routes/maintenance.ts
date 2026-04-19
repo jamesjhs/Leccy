@@ -15,9 +15,14 @@ router.get('/', (req: Request, res: Response): void => {
     let query = `SELECT * FROM maintenance_log WHERE user_id = ?`;
     const params: (string | number)[] = [authReq.user!.userId];
 
-    if (vehicleId) {
+    if (vehicleId !== undefined) {
+      const vid = parseInt(vehicleId, 10);
+      if (isNaN(vid) || vid <= 0) {
+        res.status(400).json({ error: 'Invalid vehicle ID' });
+        return;
+      }
       query += ` AND vehicle_id = ?`;
-      params.push(parseInt(vehicleId, 10));
+      params.push(vid);
     }
 
     query += ` ORDER BY log_date DESC, created_at DESC`;

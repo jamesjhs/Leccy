@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
+import pkg from '../../package.json';
 
 dotenv.config();
 
@@ -134,8 +135,8 @@ function initializeDatabase(): void {
   // Run column migrations for existing databases
   runMigrations();
 
-  // Seed APP_VERSION
-  const version = process.env.APP_VERSION || '1.0.3';
+  // Seed APP_VERSION from package.json (single source of truth)
+  const version = pkg.version;
   const upsertVersion = db.prepare(
     `INSERT INTO app_settings (key, value) VALUES ('APP_VERSION', ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`
@@ -156,8 +157,65 @@ function initializeDatabase(): void {
 }
 
 function runMigrations(): void {
+  // ── Recovery: v1.0.4 migration left dangling FK references ────────────────────
+  // The v1.0.4 migration used `ALTER TABLE users RENAME TO users_v103`. Modern
+  // SQLite (≥ 3.26.0, bundled with better-sqlite3 9.x) rewrites FK clauses in
+  // every child table to reference the new name — even when foreign_keys = OFF —
+  // unless `PRAGMA legacy_alter_table = ON` is set. After users_v103 was dropped,
+  // all child tables (vehicles, charging_sessions, etc.) had dangling FK references,
+  // causing SQLITE_ERROR "no such table: main.users_v103" on any FK-touching query.
+  // Fix: detect affected tables and rebuild each one using the standard SQLite
+  // rename-copy-drop pattern so that FK clauses reference 'users' again.
+  const affectedTables = db
+    .prepare(
+      `SELECT name, sql FROM sqlite_master
+        WHERE type = 'table' AND sql LIKE '%users_v103%'
+        ORDER BY name`,
+    )
+    .all() as Array<{ name: string; sql: string }>;
+  if (affectedTables.length > 0) {
+    db.pragma('foreign_keys = OFF');
+    db.pragma('legacy_alter_table = ON');
+    const recoverStaleRefs = db.transaction(() => {
+      for (const { name, sql } of affectedTables) {
+        const tmp = `_recovery_tmp_${name}`;
+        // Collect indexes defined on this table (exclude auto-created PK indexes
+        // which have sql = NULL and must not be re-created manually).
+        const indexes = db
+          .prepare(
+            `SELECT sql FROM sqlite_master
+              WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL`,
+          )
+          .all(name) as Array<{ sql: string }>;
+        // Build CREATE TABLE for the temp table with the stale name corrected.
+        const tmpSql = sql
+          .replace(/\busers_v103\b/g, 'users')
+          .replace(/^(CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?)\S+/i, `$1"${tmp}"`);
+        // Column list for the INSERT … SELECT copy.
+        const cols = (db.pragma(`table_info(${name})`) as Array<{ name: string }>)
+          .map((c) => `"${c.name}"`)
+          .join(', ');
+        db.exec(tmpSql);
+        db.exec(`INSERT INTO "${tmp}" (${cols}) SELECT ${cols} FROM "${name}"`);
+        db.exec(`DROP TABLE "${name}"`);
+        db.exec(`ALTER TABLE "${tmp}" RENAME TO "${name}"`);
+        // Recreate any explicit indexes that existed on the original table.
+        for (const { sql: idxSql } of indexes) {
+          db.exec(idxSql);
+        }
+        console.log(`[DB] Recovery: rebuilt "${name}" (patched stale users_v103 FK reference)`);
+      }
+    });
+    recoverStaleRefs();
+    db.pragma('legacy_alter_table = OFF');
+    db.pragma('foreign_keys = ON');
+  }
+
+  // Read full column info (including notnull flag) so we can detect constraint issues
+  const userColsInfo = db.pragma('table_info(users)') as Array<{ name: string; notnull: number }>;
+  const userCols = userColsInfo.map((c) => c.name);
+
   // Add display_name column if missing
-  const userCols = (db.pragma('table_info(users)') as Array<{ name: string }>).map((c) => c.name);
   if (!userCols.includes('display_name')) {
     db.exec(`ALTER TABLE users ADD COLUMN display_name TEXT`);
     console.log('[DB] Migration: added users.display_name');
@@ -169,6 +227,59 @@ function runMigrations(): void {
   if (!userCols.includes('locked_until')) {
     db.exec(`ALTER TABLE users ADD COLUMN locked_until TEXT`);
     console.log('[DB] Migration: added users.locked_until');
+  }
+
+  // v1.0.4: Remove NOT NULL from users.licence_plate so admin-created (email-only)
+  // users can be inserted without a licence plate.
+  // Pre-1.0.4 databases defined licence_plate TEXT NOT NULL UNIQUE; the CREATE TABLE
+  // was later updated to TEXT UNIQUE (nullable) but existing databases kept the old
+  // constraint, causing every admin user-creation attempt to fail with a 500 error.
+  const licencePlateInfo = userColsInfo.find((c) => c.name === 'licence_plate');
+  if (licencePlateInfo?.notnull === 1) {
+    // SQLite does not support DROP CONSTRAINT; the standard workaround is to
+    // rebuild the table. Foreign-key enforcement must be disabled during the
+    // rename/copy/drop sequence and re-enabled afterwards.
+    // IMPORTANT: legacy_alter_table must be ON so that modern SQLite (≥ 3.26.0)
+    // does NOT rewrite FK references in child tables when we rename users to
+    // users_v103. Without it, child tables would reference users_v103 which is
+    // immediately dropped, causing SQLITE_ERROR on the next FK-touching query.
+    db.pragma('foreign_keys = OFF');
+    db.pragma('legacy_alter_table = ON');
+    const migrateUsersTable = db.transaction(() => {
+      db.exec(`ALTER TABLE users RENAME TO users_v103`);
+      db.exec(`
+        CREATE TABLE users (
+          id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+          licence_plate          TEXT UNIQUE,
+          password_hash          TEXT NOT NULL,
+          is_admin               INTEGER NOT NULL DEFAULT 0,
+          email                  TEXT,
+          display_name           TEXT,
+          failed_login_attempts  INTEGER NOT NULL DEFAULT 0,
+          locked_until           TEXT,
+          created_at             TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+      db.exec(`
+        INSERT INTO users
+          (id, licence_plate, password_hash, is_admin, email, display_name,
+           failed_login_attempts, locked_until, created_at)
+        SELECT
+          id, licence_plate, password_hash, is_admin, email, display_name,
+          failed_login_attempts, locked_until, created_at
+        FROM users_v103
+      `);
+      db.exec(`DROP TABLE users_v103`);
+      // Recreate the partial unique index that was dropped with the old table.
+      db.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email
+          ON users(email) WHERE email IS NOT NULL
+      `);
+    });
+    migrateUsersTable();
+    db.pragma('legacy_alter_table = OFF');
+    db.pragma('foreign_keys = ON');
+    console.log('[DB] Migration: removed NOT NULL from users.licence_plate (v1.0.3 → v1.0.4)');
   }
 
   // Tariff peak/off-peak time-of-day columns

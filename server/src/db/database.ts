@@ -163,27 +163,51 @@ function runMigrations(): void {
   // unless `PRAGMA legacy_alter_table = ON` is set. After users_v103 was dropped,
   // all child tables (vehicles, charging_sessions, etc.) had dangling FK references,
   // causing SQLITE_ERROR "no such table: main.users_v103" on any FK-touching query.
-  // Fix: detect affected tables via sqlite_master and patch them back to 'users',
-  // then bump schema_version so SQLite discards its in-memory schema cache.
-  const staleRefs = (
-    db.prepare(`SELECT count(*) AS cnt FROM sqlite_master WHERE sql LIKE '%users_v103%'`)
-      .get() as { cnt: number }
-  ).cnt;
-  if (staleRefs > 0) {
-    db.pragma('writable_schema = ON');
-    db.exec(
-      `UPDATE sqlite_master
-         SET sql = REPLACE(sql, 'users_v103', 'users')
-         WHERE type IN ('table', 'index', 'trigger', 'view')
-           AND sql LIKE '%users_v103%'`,
-    );
-    db.pragma('writable_schema = OFF');
-    // Bump schema_version so SQLite re-parses all cached table definitions on
-    // the next statement preparation.
-    const sv = (db.pragma('schema_version') as Array<{ schema_version: number }>)[0]
-      .schema_version;
-    db.pragma(`schema_version = ${sv + 1}`);
-    console.log('[DB] Recovery: repaired broken FK references to dropped users_v103 table');
+  // Fix: detect affected tables and rebuild each one using the standard SQLite
+  // rename-copy-drop pattern so that FK clauses reference 'users' again.
+  const affectedTables = db
+    .prepare(
+      `SELECT name, sql FROM sqlite_master
+        WHERE type = 'table' AND sql LIKE '%users_v103%'
+        ORDER BY name`,
+    )
+    .all() as Array<{ name: string; sql: string }>;
+  if (affectedTables.length > 0) {
+    db.pragma('foreign_keys = OFF');
+    db.pragma('legacy_alter_table = ON');
+    const recoverStaleRefs = db.transaction(() => {
+      for (const { name, sql } of affectedTables) {
+        const tmp = `_recovery_tmp_${name}`;
+        // Collect indexes defined on this table (exclude auto-created PK indexes
+        // which have sql = NULL and must not be re-created manually).
+        const indexes = db
+          .prepare(
+            `SELECT sql FROM sqlite_master
+              WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL`,
+          )
+          .all(name) as Array<{ sql: string }>;
+        // Build CREATE TABLE for the temp table with the stale name corrected.
+        const tmpSql = sql
+          .replace(/\busers_v103\b/g, 'users')
+          .replace(/^(CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?)\S+/i, `$1"${tmp}"`);
+        // Column list for the INSERT … SELECT copy.
+        const cols = (db.pragma(`table_info(${name})`) as Array<{ name: string }>)
+          .map((c) => `"${c.name}"`)
+          .join(', ');
+        db.exec(tmpSql);
+        db.exec(`INSERT INTO "${tmp}" (${cols}) SELECT ${cols} FROM "${name}"`);
+        db.exec(`DROP TABLE "${name}"`);
+        db.exec(`ALTER TABLE "${tmp}" RENAME TO "${name}"`);
+        // Recreate any explicit indexes that existed on the original table.
+        for (const { sql: idxSql } of indexes) {
+          db.exec(idxSql);
+        }
+        console.log(`[DB] Recovery: rebuilt "${name}" (patched stale users_v103 FK reference)`);
+      }
+    });
+    recoverStaleRefs();
+    db.pragma('legacy_alter_table = OFF');
+    db.pragma('foreign_keys = ON');
   }
 
   // Read full column info (including notnull flag) so we can detect constraint issues

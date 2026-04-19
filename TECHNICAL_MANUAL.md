@@ -41,11 +41,14 @@ Leccy is a full-stack TypeScript application composed of:
 | Column | Type | Notes |
 |---|---|---|
 | `id` | INTEGER PK | Auto-increment |
-| `licence_plate` | TEXT UNIQUE | Stored uppercase |
-| `password_hash` | TEXT | bcryptjs, saltRounds: 12 |
-| `is_admin` | INTEGER | 0 or 1 |
-| `email` | TEXT | Nullable |
-| `created_at` | TEXT | ISO datetime |
+| `licence_plate` | TEXT UNIQUE | Optional; uppercase; NULL for email-only users |
+| `password_hash` | TEXT NOT NULL | bcryptjs, saltRounds: 12 |
+| `is_admin` | INTEGER NOT NULL | 0 or 1 |
+| `email` | TEXT | Nullable; unique (partial index, non-null only) |
+| `display_name` | TEXT | Nullable; optional friendly name |
+| `failed_login_attempts` | INTEGER NOT NULL | Default 0; increments on bad password |
+| `locked_until` | TEXT | Nullable; ISO datetime; account lockout expiry |
+| `created_at` | TEXT NOT NULL | ISO datetime |
 
 ### `charging_sessions`
 | Column | Type | Notes |
@@ -116,7 +119,7 @@ Leccy is a full-stack TypeScript application composed of:
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/login` | No | Login with licence_plate + password. Returns JWT. |
+| POST | `/login` | No | Login with email + password. Returns JWT. |
 | POST | `/logout` | No | Client-side token removal; invalidates session. |
 | GET | `/me` | Yes | Return current user info. |
 | GET | `/version` | No | Return APP_VERSION. |
@@ -419,3 +422,29 @@ The server's Helmet CSP includes `worker-src 'self'` to allow the service worker
 All monetary values are stored and transmitted as **integer pence** (1/100 of a pound) to avoid floating-point precision issues. The UI converts to/from pounds (£) for display.
 
 Example: £1.23 is stored as `123` pence.
+
+---
+
+## Changelog
+
+### v1.0.4
+
+**Bug fix — admin user creation returning 500**
+
+The `users.licence_plate` column was originally created as `TEXT NOT NULL UNIQUE`. When support
+for email-only (admin-created) users was added, the `CREATE TABLE` definition was updated to
+`TEXT UNIQUE` (nullable), but no database migration was written to drop the `NOT NULL` constraint
+from existing databases. Consequently, every call to `POST /api/admin/users` failed with:
+
+```
+SqliteError: NOT NULL constraint failed: users.licence_plate
+```
+
+which was caught by the route's `try/catch` and returned as a generic 500 response.
+
+**Fix:** `runMigrations()` now detects whether `licence_plate` carries a `NOT NULL` constraint
+(via `PRAGMA table_info(users)`). If it does, the function rebuilds the `users` table using
+SQLite's standard rename → recreate → copy → drop pattern, with `PRAGMA foreign_keys = OFF`
+during the operation to avoid constraint errors on child tables. After the migration the new
+table definition matches the `CREATE TABLE` in the source, and `licence_plate` is correctly
+nullable. All existing data is preserved.

@@ -135,7 +135,7 @@ function initializeDatabase(): void {
   runMigrations();
 
   // Seed APP_VERSION
-  const version = process.env.APP_VERSION || '1.0.3';
+  const version = process.env.APP_VERSION || '1.0.4';
   const upsertVersion = db.prepare(
     `INSERT INTO app_settings (key, value) VALUES ('APP_VERSION', ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`
@@ -156,8 +156,11 @@ function initializeDatabase(): void {
 }
 
 function runMigrations(): void {
+  // Read full column info (including notnull flag) so we can detect constraint issues
+  const userColsInfo = db.pragma('table_info(users)') as Array<{ name: string; notnull: number }>;
+  const userCols = userColsInfo.map((c) => c.name);
+
   // Add display_name column if missing
-  const userCols = (db.pragma('table_info(users)') as Array<{ name: string }>).map((c) => c.name);
   if (!userCols.includes('display_name')) {
     db.exec(`ALTER TABLE users ADD COLUMN display_name TEXT`);
     console.log('[DB] Migration: added users.display_name');
@@ -169,6 +172,53 @@ function runMigrations(): void {
   if (!userCols.includes('locked_until')) {
     db.exec(`ALTER TABLE users ADD COLUMN locked_until TEXT`);
     console.log('[DB] Migration: added users.locked_until');
+  }
+
+  // v1.0.4: Remove NOT NULL from users.licence_plate so admin-created (email-only)
+  // users can be inserted without a licence plate.
+  // Pre-1.0.4 databases defined licence_plate TEXT NOT NULL UNIQUE; the CREATE TABLE
+  // was later updated to TEXT UNIQUE (nullable) but existing databases kept the old
+  // constraint, causing every admin user-creation attempt to fail with a 500 error.
+  const licencePlateInfo = userColsInfo.find((c) => c.name === 'licence_plate');
+  if (licencePlateInfo && licencePlateInfo.notnull === 1) {
+    // SQLite does not support DROP CONSTRAINT; the standard workaround is to
+    // rebuild the table. Foreign-key enforcement must be disabled during the
+    // rename/copy/drop sequence and re-enabled afterwards.
+    db.pragma('foreign_keys = OFF');
+    const migrateUsersTable = db.transaction(() => {
+      db.exec(`ALTER TABLE users RENAME TO users_v103`);
+      db.exec(`
+        CREATE TABLE users (
+          id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+          licence_plate          TEXT UNIQUE,
+          password_hash          TEXT NOT NULL,
+          is_admin               INTEGER NOT NULL DEFAULT 0,
+          email                  TEXT,
+          display_name           TEXT,
+          failed_login_attempts  INTEGER NOT NULL DEFAULT 0,
+          locked_until           TEXT,
+          created_at             TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+      db.exec(`
+        INSERT INTO users
+          (id, licence_plate, password_hash, is_admin, email, display_name,
+           failed_login_attempts, locked_until, created_at)
+        SELECT
+          id, licence_plate, password_hash, is_admin, email, display_name,
+          failed_login_attempts, locked_until, created_at
+        FROM users_v103
+      `);
+      db.exec(`DROP TABLE users_v103`);
+      // Recreate the partial unique index that was dropped with the old table.
+      db.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email
+          ON users(email) WHERE email IS NOT NULL
+      `);
+    });
+    migrateUsersTable();
+    db.pragma('foreign_keys = ON');
+    console.log('[DB] Migration: removed NOT NULL from users.licence_plate (v1.0.3 → v1.0.4)');
   }
 
   // Tariff peak/off-peak time-of-day columns

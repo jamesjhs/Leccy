@@ -409,7 +409,7 @@ Leccy v1.1.1 ships as a fully installable PWA. The following files drive this:
 - **Navigation requests** (`mode === 'navigate'`): serve the cached SPA shell (`/`) so the app loads offline after the first visit.
 - **`/api/*` requests**: network-first; returns a JSON `503` error response when offline.
 - **All other static assets**: cache-first, populating the cache on the first fetch.
-- Cache is versioned (`leccy-1.0.4`); old caches are purged on activation.
+- Cache is versioned (`leccy-1.1.0`); old caches are purged on activation.
 
 ### Content-Security-Policy
 
@@ -426,6 +426,10 @@ Example: £1.23 is stored as `123` pence.
 ---
 
 ## Changelog
+
+### v1.1.0
+
+Version bump incorporating all fixes from v1.0.4 and v1.0.5. No new features in this release.
 
 ### v1.0.5
 

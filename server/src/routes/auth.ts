@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import db, { getSetting } from '../db/database';
 import { authenticate } from '../middleware/auth';
+import { JWT_SECRET, JWT_EXPIRES_IN } from '../config';
 import {
   validate,
   loginSchema,
@@ -22,9 +23,6 @@ import { AuthenticatedRequest, User, User2FA } from '../types';
 import { sendMail } from '../utils/mailer';
 
 const router = Router();
-
-const JWT_SECRET = process.env.JWT_SECRET || 'change_this_jwt_secret_to_something_secure';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 /** Max failed login attempts before lockout */
 const MAX_FAILED_ATTEMPTS = 5;
@@ -68,7 +66,7 @@ function issueToken(user: User): string {
     email: user.email,
     isAdmin: user.is_admin === 1,
   };
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions);
+  return jwt.sign(payload, JWT_SECRET, { algorithm: 'HS256', expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions);
 }
 
 /** Sanitised user object safe to return to client */
@@ -191,7 +189,7 @@ router.post('/login', authLimiter, validate(loginSchema), async (req: Request, r
       const tempToken = jwt.sign(
         { userId: user.id, twoFAPending: true },
         JWT_SECRET,
-        { expiresIn: '10m' } as jwt.SignOptions
+        { algorithm: 'HS256', expiresIn: '10m' } as jwt.SignOptions
       );
 
       // Send OTP
@@ -234,7 +232,7 @@ router.post('/2fa/verify-login', authLimiter, validate(verify2faLoginSchema), as
 
     let payload: { userId: number; twoFAPending: boolean };
     try {
-      payload = jwt.verify(temp_token, JWT_SECRET) as { userId: number; twoFAPending: boolean };
+      payload = jwt.verify(temp_token, JWT_SECRET, { algorithms: ['HS256'] }) as { userId: number; twoFAPending: boolean };
     } catch {
       res.status(401).json({ error: 'Invalid or expired session. Please log in again.' });
       return;

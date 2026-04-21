@@ -95,7 +95,14 @@ router.get('/settings', (_req: Request, res: Response): void => {
     const settings = db
       .prepare(`SELECT key, value FROM app_settings WHERE key NOT IN ('DB_ENCRYPTION_KEY', 'JWT_SECRET')`)
       .all() as AppSetting[];
-    res.json({ settings });
+
+    // Redact the SMTP password so it is never returned to the client.
+    // An admin can update the password but should never be able to read it back.
+    const redacted = settings.map((s) =>
+      s.key === 'SMTP_PASS' ? { ...s, value: s.value ? '••••••••' : '' } : s
+    );
+
+    res.json({ settings: redacted });
   } catch (err) {
     console.error('[admin/settings GET]', err);
     res.status(500).json({ error: 'Internal server error' });

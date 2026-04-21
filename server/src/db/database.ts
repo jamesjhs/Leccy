@@ -148,6 +148,23 @@ function initializeDatabase(): void {
   if (!adminExists) {
     const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@123';
     const adminEmail = process.env.ADMIN_EMAIL || null;
+
+    if (!process.env.ADMIN_PASSWORD && process.env.NODE_ENV === 'production') {
+      // In production, refuse to create the admin with the well-known default password.
+      console.error(
+        '[DB] FATAL: ADMIN_PASSWORD is not set. Refusing to create the admin account ' +
+        'with the default password in production. Set ADMIN_PASSWORD in your .env file.',
+      );
+      process.exit(1);
+    }
+
+    if (!process.env.ADMIN_PASSWORD) {
+      console.warn(
+        '[DB] WARNING: ADMIN_PASSWORD is not set. The admin account is being created with ' +
+        'the default password "Admin@123". Change this before deploying to production.',
+      );
+    }
+
     const hash = bcrypt.hashSync(adminPassword, 12);
     db.prepare(
       `INSERT INTO users (licence_plate, password_hash, is_admin, email) VALUES ('ADMIN', ?, 1, ?)`

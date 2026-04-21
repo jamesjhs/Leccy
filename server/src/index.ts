@@ -1,7 +1,11 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import express from 'express';
+// Config is imported early so it can validate required env vars and fail fast
+// before any routes or middleware are registered.
+import { IS_PROD } from './config';
+
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import hpp from 'hpp';
@@ -20,7 +24,6 @@ import vehiclesRoutes from './routes/vehicles';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '2030', 10);
-const IS_PROD = process.env.NODE_ENV === 'production';
 
 // ─── Trust proxy (nginx sits in front) ────────────────────────────────────────
 // Required so express-rate-limit uses the real client IP (from X-Forwarded-For)
@@ -95,8 +98,12 @@ const apiLimiter = rateLimit({
 });
 
 // ─── Heartbeat ─────────────────────────────────────────────────────────────────
+// Version is omitted in production to avoid leaking information that could help
+// an attacker target known vulnerabilities in a specific release.
 app.get('/readyz', (_req, res) => {
-  res.json({ ok: true, service: 'leccy', version: APP_VERSION, timestamp: new Date().toISOString() });
+  const body: Record<string, unknown> = { ok: true, service: 'leccy', timestamp: new Date().toISOString() };
+  if (!IS_PROD) body.version = APP_VERSION;
+  res.json(body);
 });
 
 // ─── API routes ────────────────────────────────────────────────────────────────
@@ -117,6 +124,16 @@ if (IS_PROD) {
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }
+
+// ─── Global error handler ──────────────────────────────────────────────────────
+// Catches any error passed to next(err) or thrown from async handlers.
+// In production the raw error (which may contain stack traces or internal
+// details) is never forwarded to the client.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction): void => {
+  console.error('[unhandled error]', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
 
 app.listen(PORT, () => {
   console.log(`[server] Leccy running on port ${PORT} (${process.env.NODE_ENV || 'development'})`);

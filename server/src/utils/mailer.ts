@@ -1,11 +1,12 @@
 import nodemailer from 'nodemailer';
 import { getSetting } from '../db/database';
+import { IS_PROD } from '../config';
 
 /**
  * Build a nodemailer transporter from SMTP settings stored in app_settings.
- * Verbose logging is always enabled so SMTP conversations appear in the
- * server log — useful for diagnosing delivery issues without needing a
- * separate mail client or packet capture.
+ * In development, verbose SMTP logging is enabled to aid debugging.
+ * In production, logging is disabled to prevent credentials and OTP codes
+ * from appearing in application logs.
  * Throws if required SMTP settings are missing.
  */
 export function createTransporter() {
@@ -24,8 +25,11 @@ export function createTransporter() {
     port,
     secure,
     auth: user ? { user, pass } : undefined,
-    logger: true,  // write SMTP conversation to console
-    debug: true,   // include DATA payload in log output
+    // Disable verbose logging in production: SMTP AUTH commands contain
+    // credentials and the DATA payload contains OTP codes — both would be
+    // written to application logs and could be captured by log aggregators.
+    logger: !IS_PROD,
+    debug: !IS_PROD,
   });
 }
 

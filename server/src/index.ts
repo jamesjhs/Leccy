@@ -23,10 +23,10 @@ const PORT = parseInt(process.env.PORT || '2030', 10);
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 // ─── Startup security checks ───────────────────────────────────────────────────
-const _DEFAULT_JWT_SECRET = 'change_this_jwt_secret_to_something_secure';
-const _DEFAULT_ADMIN_PASS = 'Admin@123';
+const DEFAULT_JWT_SECRET = 'change_this_jwt_secret_to_something_secure';
+const DEFAULT_ADMIN_PASS = 'Admin@123';
 
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET === _DEFAULT_JWT_SECRET) {
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET === DEFAULT_JWT_SECRET) {
   if (IS_PROD) {
     console.error('[security] FATAL: JWT_SECRET is missing or uses the insecure default placeholder.');
     console.error('[security] Set a strong random JWT_SECRET in your .env file and restart.');
@@ -36,7 +36,7 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET === _DEFAULT_JWT_SECRET) {
   }
 }
 
-if (process.env.ADMIN_PASSWORD === _DEFAULT_ADMIN_PASS) {
+if (process.env.ADMIN_PASSWORD === DEFAULT_ADMIN_PASS) {
   if (IS_PROD) {
     console.error('[security] FATAL: ADMIN_PASSWORD is set to the default "Admin@123".');
     console.error('[security] Set a strong ADMIN_PASSWORD in your .env file and restart.');

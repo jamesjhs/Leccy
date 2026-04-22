@@ -97,7 +97,7 @@ router.get('/settings', (_req: Request, res: Response): void => {
       .all() as AppSetting[];
     // Mask the SMTP password so it is never returned to the client in plaintext
     const safeSettings = settings.map((s) =>
-      s.key === 'SMTP_PASS' ? { ...s, value: s.value ? '********' : '' } : s
+      s.key === 'SMTP_PASS' ? { ...s, value: s.value != null && s.value !== '' ? '********' : '' } : s
     );
     res.json({ settings: safeSettings });
   } catch (err) {

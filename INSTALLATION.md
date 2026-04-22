@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker v1.1.1: Installation Guide
+# Leccy — EV Cost Tracker v1.2.0: Installation Guide
 
 ## Prerequisites
 

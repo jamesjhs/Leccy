@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker v1.1.1: Technical Manual
+# Leccy — EV Cost Tracker v1.2.0: Technical Manual
 
 ## Architecture Overview
 

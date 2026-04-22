@@ -95,7 +95,11 @@ router.get('/settings', (_req: Request, res: Response): void => {
     const settings = db
       .prepare(`SELECT key, value FROM app_settings WHERE key NOT IN ('DB_ENCRYPTION_KEY', 'JWT_SECRET')`)
       .all() as AppSetting[];
-    res.json({ settings });
+    // Mask the SMTP password so it is never returned to the client in plaintext
+    const safeSettings = settings.map((s) =>
+      s.key === 'SMTP_PASS' ? { ...s, value: s.value != null && s.value !== '' ? '********' : '' } : s
+    );
+    res.json({ settings: safeSettings });
   } catch (err) {
     console.error('[admin/settings GET]', err);
     res.status(500).json({ error: 'Internal server error' });

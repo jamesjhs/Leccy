@@ -22,6 +22,30 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '2030', 10);
 const IS_PROD = process.env.NODE_ENV === 'production';
 
+// ─── Startup security checks ───────────────────────────────────────────────────
+const DEFAULT_JWT_SECRET = 'change_this_jwt_secret_to_something_secure';
+const DEFAULT_ADMIN_PASS = 'Admin@123';
+
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET === DEFAULT_JWT_SECRET) {
+  if (IS_PROD) {
+    console.error('[security] FATAL: JWT_SECRET is missing or uses the insecure default placeholder.');
+    console.error('[security] Set a strong random JWT_SECRET in your .env file and restart.');
+    process.exit(1);
+  } else {
+    console.warn('[security] WARNING: JWT_SECRET is not set or uses the default. This MUST be changed before deploying to production.');
+  }
+}
+
+if (process.env.ADMIN_PASSWORD === DEFAULT_ADMIN_PASS) {
+  if (IS_PROD) {
+    console.error('[security] FATAL: ADMIN_PASSWORD is set to the default "Admin@123".');
+    console.error('[security] Set a strong ADMIN_PASSWORD in your .env file and restart.');
+    process.exit(1);
+  } else {
+    console.warn('[security] WARNING: ADMIN_PASSWORD is using the default value. Change it before deploying to production.');
+  }
+}
+
 // ─── Trust proxy (nginx sits in front) ────────────────────────────────────────
 // Required so express-rate-limit uses the real client IP (from X-Forwarded-For)
 // rather than the nginx proxy IP.

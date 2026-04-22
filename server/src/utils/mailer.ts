@@ -19,13 +19,15 @@ export function createTransporter() {
     throw new Error('SMTP_HOST is not configured. Set it in Admin → Settings.');
   }
 
+  const isDev = process.env.NODE_ENV !== 'production';
+
   return nodemailer.createTransport({
     host,
     port,
     secure,
     auth: user ? { user, pass } : undefined,
-    logger: true,  // write SMTP conversation to console
-    debug: true,   // include DATA payload in log output
+    logger: isDev,  // only log SMTP conversations in development
+    debug: isDev,   // only include DATA payload in log output in development
   });
 }
 

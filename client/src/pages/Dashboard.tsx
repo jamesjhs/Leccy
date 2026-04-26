@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthContext } from '../App';
 import { tariffApi, analyticsApi, vehiclesApi, TariffConfig, Vehicle } from '../utils/api';
+import { downloadExcel, downloadPDF } from '../utils/exportUtils';
 
 interface SummaryStats {
   total_cost_pence: number;
@@ -43,6 +44,8 @@ export default function Dashboard() {
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [stats, setStats] = useState<SummaryStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exportLoading, setExportLoading] = useState<'excel' | 'pdf' | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // Petrol/diesel comparison state
   const [fuelType, setFuelType] = useState<FuelType>('petrol');
@@ -91,6 +94,30 @@ export default function Dashboard() {
 
   function vehicleLabel(v: Vehicle) {
     return v.nickname ? `${v.nickname} (${v.licence_plate})` : v.licence_plate;
+  }
+
+  async function handleExportExcel() {
+    setExportLoading('excel');
+    setExportError(null);
+    try {
+      await downloadExcel();
+    } catch (err: any) {
+      setExportError(err.message || 'Failed to export Excel');
+    } finally {
+      setExportLoading(null);
+    }
+  }
+
+  async function handleExportPDF() {
+    setExportLoading('pdf');
+    setExportError(null);
+    try {
+      await downloadPDF();
+    } catch (err: any) {
+      setExportError(err.message || 'Failed to export PDF');
+    } finally {
+      setExportLoading(null);
+    }
   }
 
   return (
@@ -189,19 +216,51 @@ export default function Dashboard() {
           )}
 
           {/* Quick links */}
-          <div className="flex gap-3">
-            <Link
-              to="/data-entry"
-              className="bg-green-700 hover:bg-green-600 text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors"
-            >
-              + Add Charging Session
-            </Link>
-            <Link
-              to="/analytics"
-              className="bg-white hover:bg-green-50 border border-green-300 text-green-800 font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors"
-            >
-              View Analytics
-            </Link>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-3">
+              <Link
+                to="/data-entry"
+                className="bg-green-700 hover:bg-green-600 text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors"
+              >
+                + Add Charging Session
+              </Link>
+              <Link
+                to="/analytics"
+                className="bg-white hover:bg-green-50 border border-green-300 text-green-800 font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors"
+              >
+                View Analytics
+              </Link>
+              <Link
+                to="/csv-import"
+                className="bg-white hover:bg-green-50 border border-green-300 text-green-800 font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors"
+              >
+                📥 Import CSV
+              </Link>
+            </div>
+
+            {/* Export buttons */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleExportExcel}
+                disabled={exportLoading !== null}
+                className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2"
+              >
+                {exportLoading === 'excel' ? '⏳' : '📊'} Excel
+              </button>
+              <button
+                onClick={handleExportPDF}
+                disabled={exportLoading !== null}
+                className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2"
+              >
+                {exportLoading === 'pdf' ? '⏳' : '📄'} PDF
+              </button>
+            </div>
+
+            {exportError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-800">
+                ⚠️ {exportError}
+              </div>
+            )}
           </div>
         </>
       )}

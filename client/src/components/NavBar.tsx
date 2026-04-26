@@ -6,6 +6,7 @@ const navLinks = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/vehicles', label: 'Vehicles' },
   { to: '/data-entry', label: 'Data Entry' },
+  { to: '/csv-import', label: '📥 Import CSV' },
   { to: '/maintenance', label: 'Maintenance' },
   { to: '/tariff', label: 'Tariff' },
   { to: '/analytics', label: 'Analytics' },

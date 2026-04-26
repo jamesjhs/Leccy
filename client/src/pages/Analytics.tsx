@@ -5,6 +5,7 @@ import {
   RangeAnxietyChart, ChargingHabitsChart,
 } from '../charts';
 import { analyticsApi, vehiclesApi, AnalyticsResult, Vehicle } from '../utils/api';
+import { downloadExcel, downloadPDF } from '../utils/exportUtils';
 
 type Period = 'week' | 'month' | 'all' | 'custom';
 
@@ -32,6 +33,8 @@ export default function Analytics() {
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [data, setData] = useState<AnalyticsResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exportLoading, setExportLoading] = useState<'excel' | 'pdf' | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadVehicles() {
@@ -59,6 +62,30 @@ export default function Analytics() {
       setData(res.data);
     } catch {/* ignore */} finally {
       setLoading(false);
+    }
+  }
+
+  async function handleExportExcel() {
+    setExportLoading('excel');
+    setExportError(null);
+    try {
+      await downloadExcel();
+    } catch (err: any) {
+      setExportError(err.message || 'Failed to export Excel');
+    } finally {
+      setExportLoading(null);
+    }
+  }
+
+  async function handleExportPDF() {
+    setExportLoading('pdf');
+    setExportError(null);
+    try {
+      await downloadPDF();
+    } catch (err: any) {
+      setExportError(err.message || 'Failed to export PDF');
+    } finally {
+      setExportLoading(null);
     }
   }
 
@@ -123,6 +150,30 @@ export default function Analytics() {
           </button>
         ))}
       </div>
+
+      {/* Export buttons */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button
+          onClick={handleExportExcel}
+          disabled={exportLoading !== null}
+          className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2"
+        >
+          {exportLoading === 'excel' ? '⏳' : '📊'} Excel
+        </button>
+        <button
+          onClick={handleExportPDF}
+          disabled={exportLoading !== null}
+          className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2"
+        >
+          {exportLoading === 'pdf' ? '⏳' : '📄'} PDF
+        </button>
+      </div>
+
+      {exportError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-4 text-sm text-red-800">
+          ⚠️ {exportError}
+        </div>
+      )}
 
       {period === 'custom' && (
         <div className="flex flex-wrap gap-3 mb-4 items-end">

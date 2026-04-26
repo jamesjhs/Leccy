@@ -17,6 +17,8 @@ import tariffRoutes from './routes/tariff';
 import analyticsRoutes from './routes/analytics';
 import adminRoutes from './routes/admin';
 import vehiclesRoutes from './routes/vehicles';
+import exportRoutes from './routes/export';
+import importRoutes from './routes/import';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '2030', 10);
@@ -107,6 +109,7 @@ app.use(
 // ─── Body parsing — enforce a strict size cap ──────────────────────────────────
 app.use(express.json({ limit: '50kb' }));
 app.use(express.urlencoded({ extended: false, limit: '50kb' }));
+app.use(express.text({ limit: '50kb' }));
 
 // ─── Rate limiters ─────────────────────────────────────────────────────────────
 // Global: 300 requests per 15 min per IP
@@ -132,6 +135,8 @@ app.use('/api/tariff', apiLimiter, tariffRoutes);
 app.use('/api/analytics', apiLimiter, analyticsRoutes);
 app.use('/api/admin', apiLimiter, adminRoutes);
 app.use('/api/vehicles', apiLimiter, vehiclesRoutes);
+app.use('/api/export', apiLimiter, exportRoutes);
+app.use('/api/import', apiLimiter, importRoutes);
 
 // ─── Serve frontend in production ─────────────────────────────────────────────
 if (IS_PROD) {

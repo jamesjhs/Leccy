@@ -12,6 +12,7 @@ import Maintenance from './pages/Maintenance';
 import Tariff from './pages/Tariff';
 import Analytics from './pages/Analytics';
 import Vehicles from './pages/Vehicles';
+import CSVImport from './pages/CSVImport';
 import Admin from './pages/Admin';
 import Landing from './pages/Landing';
 import { UserInfo } from './utils/api';
@@ -109,6 +110,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Layout><Analytics /></Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/csv-import"
+            element={
+              <ProtectedRoute>
+                <Layout><CSVImport /></Layout>
               </ProtectedRoute>
             }
           />

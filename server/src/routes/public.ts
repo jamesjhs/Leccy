@@ -13,7 +13,7 @@ router.get('/stats', (_req: Request, res: Response): void => {
   try {
     const row = db
       .prepare(
-        `WITH non_admin_sessions AS (
+        `WITH public_sessions AS (
            SELECT
              cs.id,
              cs.user_id,
@@ -22,8 +22,6 @@ router.get('/stats', (_req: Request, res: Response): void => {
              cs.date_unplugged,
              cs.created_at
            FROM charging_sessions cs
-           INNER JOIN users u ON u.id = cs.user_id
-           WHERE u.is_admin = 0
          ),
          session_miles AS (
            SELECT
@@ -31,15 +29,13 @@ router.get('/stats', (_req: Request, res: Response): void => {
                PARTITION BY user_id, COALESCE(vehicle_id, 0)
                ORDER BY date_unplugged, created_at, id
              ) AS miles_delta
-           FROM non_admin_sessions
+           FROM public_sessions
          )
          SELECT
-           (SELECT COUNT(*) FROM non_admin_sessions) AS sessions_logged,
+           (SELECT COUNT(*) FROM public_sessions) AS sessions_logged,
            (
              SELECT COALESCE(SUM(cc.price_pence), 0)
              FROM charger_costs cc
-             INNER JOIN users u ON u.id = cc.user_id
-             WHERE u.is_admin = 0
            ) AS total_cost_pence,
            (
              SELECT COALESCE(SUM(miles_delta), 0)

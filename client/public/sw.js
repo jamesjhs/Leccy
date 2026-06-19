@@ -3,7 +3,7 @@
    Cache-first for static assets, network-first for /api/
    ============================================================ */
 
-const CACHE_NAME = 'leccy-1.3.0';
+const CACHE_NAME = 'leccy-1.3.1';
 
 const STATIC_ASSETS = [
   '/',
@@ -28,6 +28,12 @@ self.addEventListener('activate', event => {
       Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
+});
+
+self.addEventListener('message', event => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', event => {

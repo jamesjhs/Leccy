@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker v1.3.0: Installation Guide
+# Leccy — EV Cost Tracker v1.3.1: Installation Guide
 
 ## Prerequisites
 
@@ -77,25 +77,13 @@ cd ..
 
 ## 4. Build for production
 
-### Build the frontend
+From the repository root:
 
 ```bash
-cd client
 npm run build
-cd ..
 ```
 
-Built static files will be placed in `client/dist/`.
-
-### Build the backend
-
-```bash
-cd server
-npm run build
-cd ..
-```
-
-Compiled output will be in `server/dist/`.
+This builds both the frontend and backend. Built static files are placed in `client/dist/`; compiled backend output is placed in `server/dist/`.
 
 ---
 
@@ -129,6 +117,14 @@ pm2 start ecosystem.config.js
 ```
 
 This starts Leccy in production mode using the compiled `server/dist/index.js`.
+
+For local production smoke testing from the repository root, run:
+
+```bash
+npm start
+```
+
+This starts the compiled API server and Vite preview server together. Run `npm run build` first.
 
 ### Verify it is running
 
@@ -300,12 +296,12 @@ curl https://leccy.jahosi.co.uk/api/auth/version
 
 ## 11. Installing as a mobile app (PWA)
 
-Leccy v1.1.1 is a fully-featured **Progressive Web App**. Once deployed behind HTTPS, users can install it directly from their mobile browser with no app store required.
+Leccy v1.3.1 is a fully-featured **Progressive Web App**. Once deployed behind HTTPS, supported browsers show an in-app install prompt on first load. Users can also install it directly from their browser menu with no app store required.
 
 ### Android (Chrome)
 
 1. Open the site in **Chrome** on Android.
-2. Tap the browser menu (⋮) and choose **Add to Home screen**.
+2. Use the in-app install prompt if it appears, or tap the browser menu (⋮) and choose **Add to Home screen**.
 3. Confirm the name and tap **Add**.
 
 The app will appear on the home screen and launch full-screen without any browser chrome.
@@ -320,4 +316,8 @@ The app will appear on the home screen and launch full-screen without any browse
 The app will appear on the home screen and launch in standalone mode.
 
 > **Note:** iOS requires HTTPS for PWA installation. Ensure Cloudflare's proxy (orange cloud) is active and SSL/TLS mode is set to **Full** or **Full (strict)**.
+
+### PWA updates
+
+The service worker cache is versioned with the app version. On load, installed PWAs check for a newer service worker, activate it immediately when found, purge old caches, and reload the app once the new version controls the page.
 

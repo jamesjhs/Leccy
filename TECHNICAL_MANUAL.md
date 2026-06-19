@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker v1.3.0: Technical Manual
+# Leccy — EV Cost Tracker v1.3.1: Technical Manual
 
 ## Architecture Overview
 
@@ -16,7 +16,7 @@ Leccy is a full-stack TypeScript application composed of:
 │  ├── src/pages/*                    │
 │  ├── src/components/*               │
 │  ├── src/hooks/useAuth.ts           │
-│  └── src/utils/api.ts (Axios)       │
+│  └── src/utils/api.ts (fetch wrapper)│
 └─────────────┬───────────────────────┘
               │ HTTP /api/*
 ┌─────────────▼───────────────────────┐
@@ -142,6 +142,7 @@ Leccy is a full-stack TypeScript application composed of:
   "final_battery_pct": 90,
   "final_range_miles": 238,
   "air_temp_celsius": 12.5,
+  "date_started": "2024-03-15",
   "date_unplugged": "2024-03-15"
 }
 ```
@@ -335,17 +336,14 @@ DB_PATH=/var/data/leccy/leccy.db
 ### Build
 
 ```bash
-# Build frontend
-cd client && npm install && npm run build && cd ..
-
-# Build backend
-cd server && npm install && npm run build && cd ..
+# Install dependencies in client and server first, then build both from the root
+npm run build
 ```
 
 ### Start
 
 ```bash
-cd server && node dist/index.js
+npm start
 ```
 
 Or with PM2:
@@ -388,21 +386,22 @@ server {
 - **Forms:** React Hook Form with validation
 - **Charts:** Recharts (LineChart, BarChart, ScatterChart)
 - **Routing:** React Router v6 (protected routes via `ProtectedRoute` wrapper)
-- **Quick entry:** `/quick-data-entry` stores an in-browser draft for charge-start odometer, battery, and range, then submits through the existing sessions and charger cost APIs.
+- **Quick entry:** `/quick-data-entry` is the authenticated default route. It stores an in-browser draft for charge-start odometer, SOC, and range, collapses saved start details into a summary, estimates kWh from SOC gained × vehicle battery size, and submits through the existing sessions and charger cost APIs.
 - **Styling:** Tailwind CSS with a green EV theme
-- **API Client:** Axios with request/response interceptors for auth
-- **PWA:** Web App Manifest + Service Worker — installable on Android (Chrome) and iOS (Safari)
+- **API Client:** Lightweight fetch wrapper with axios-like response/error shape
+- **PWA:** Web App Manifest + Service Worker — installable on Android (Chrome) and iOS (Safari), with a browser-gated first-load install prompt where supported.
 
 ---
 
 ## Progressive Web App (PWA)
 
-Leccy v1.1.1 ships as a fully installable PWA. The following files drive this:
+Leccy v1.3.1 ships as a fully installable PWA. The following files drive this:
 
 | File | Purpose |
 |---|---|
 | `client/public/manifest.json` | Web App Manifest (name, icons, theme colour, display mode) |
 | `client/public/sw.js` | Service Worker — cache-first static assets, network-first API |
+| `client/src/components/PwaInstallPrompt.tsx` | Browser-gated install prompt using `beforeinstallprompt` |
 | `client/public/icons/icon-*.png` | PNG icons in 8 sizes (72 → 512 px) generated from the SVG favicon |
 | `client/public/apple-touch-icon.png` | 180×180 icon used by Safari on iOS |
 
@@ -411,7 +410,9 @@ Leccy v1.1.1 ships as a fully installable PWA. The following files drive this:
 - **Navigation requests** (`mode === 'navigate'`): serve the cached SPA shell (`/`) so the app loads offline after the first visit.
 - **`/api/*` requests**: network-first; returns a JSON `503` error response when offline.
 - **All other static assets**: cache-first, populating the cache on the first fetch.
-- Cache is versioned (`leccy-1.3.0`); old caches are purged on activation.
+- Cache is versioned (`leccy-1.3.1`); old caches are purged on activation.
+- The client calls `registration.update()` on load, sends `SKIP_WAITING` to an installed update, and reloads when `controllerchange` fires so installed PWAs move to the newest app version promptly.
+- The production server serves `sw.js` with `Cache-Control: no-store` and `index.html` with `Cache-Control: no-cache` so update checks are not blocked by stale shell files.
 
 ### Content-Security-Policy
 
@@ -428,6 +429,20 @@ Example: £1.23 is stored as `123` pence.
 ---
 
 ## Changelog
+
+### v1.3.1
+
+- Added first-load PWA install prompt where supported by the browser.
+- Made Quick Entry the authenticated default page, including login, registration, magic-link completion, and installed PWA start URL.
+- Added root-level `npm run build` and `npm start` commands covering client and server.
+- Improved PWA update behavior with service-worker update checks, immediate activation, old-cache cleanup, and app reload on new controller activation.
+- Refined Quick Entry with collapsed saved-start summaries, SOC-based kWh estimates, optional kWh/cost submission, away price unit toggling, and previous-odometer placeholder text.
+
+### v1.3.0
+
+- Added Quick Data Entry flow with local saved charge-start drafts.
+- Added optional `date_started` support on charging sessions.
+- Added vehicle battery capacity support for charge estimates.
 
 ### v1.1.0
 

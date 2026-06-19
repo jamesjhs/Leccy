@@ -136,8 +136,17 @@ app.use('/api/vehicles', apiLimiter, vehiclesRoutes);
 // ─── Serve frontend in production ─────────────────────────────────────────────
 if (IS_PROD) {
   const clientDist = path.resolve(__dirname, '../../client/dist');
+  app.get('/sw.js', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.sendFile(path.join(clientDist, 'sw.js'));
+  });
+  app.get('/manifest.json', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(clientDist, 'manifest.json'));
+  });
   app.use(express.static(clientDist));
   app.get('*', apiLimiter, (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }

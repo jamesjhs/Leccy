@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import PublicFooter from '../components/PublicFooter';
+import { publicApi, PublicStats } from '../utils/api';
 
 /* ─────────────────────────────────────────
    INLINE MOCK SCREENSHOTS
@@ -370,7 +372,45 @@ function ComingSoonCard({ icon, title, desc, tags }: { icon: string; title: stri
 /* ─────────────────────────────────────────
    MAIN LANDING PAGE
 ───────────────────────────────────────── */
+function formatInteger(value?: number): string {
+  if (value === undefined) return '—';
+  return Math.round(value).toLocaleString('en-GB');
+}
+
+function formatPoundsFromPence(value?: number): string {
+  if (value === undefined) return '—';
+  return `£${Math.round(value / 100).toLocaleString('en-GB')}`;
+}
+
+function formatPence(value?: number): string {
+  if (value === undefined) return '—';
+  return `${value.toFixed(1)}p`;
+}
+
 export default function Landing() {
+  const [publicStats, setPublicStats] = useState<PublicStats | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    publicApi.stats()
+      .then((res) => {
+        if (!cancelled) setPublicStats(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) setPublicStats(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const liveStats = [
+    { val: formatInteger(publicStats?.miles_tracked), unit: 'miles tracked', icon: '🛣️' },
+    { val: formatPoundsFromPence(publicStats?.total_cost_pence), unit: 'EV spend tracked', icon: '💷' },
+    { val: formatInteger(publicStats?.sessions_logged), unit: 'sessions logged', icon: '🔋' },
+    { val: formatPence(publicStats?.cost_per_mile_pence), unit: 'avg cost per mile', icon: '📉' },
+  ];
+
   return (
     <div className="min-h-screen bg-white font-sans">
 
@@ -453,12 +493,7 @@ export default function Landing() {
       {/* ── STATS STRIP ── */}
       <section className="bg-green-900 text-white py-10 px-4">
         <div className="max-w-4xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-8 text-center">
-          {[
-            { val: '18,340', unit: 'miles tracked', icon: '🛣️' },
-            { val: '£2,341', unit: 'example EV spend', icon: '💷' },
-            { val: '847', unit: 'sessions logged', icon: '🔋' },
-            { val: '4.2p', unit: 'avg cost per mile', icon: '📉' },
-          ].map((s) => (
+          {liveStats.map((s) => (
             <div key={s.unit}>
               <div className="text-3xl mb-1">{s.icon}</div>
               <div className="text-2xl font-extrabold text-white">{s.val}</div>

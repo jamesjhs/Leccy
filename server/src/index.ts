@@ -17,6 +17,7 @@ import tariffRoutes from './routes/tariff';
 import analyticsRoutes from './routes/analytics';
 import adminRoutes from './routes/admin';
 import vehiclesRoutes from './routes/vehicles';
+import publicRoutes from './routes/public';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '2030', 10);
@@ -124,6 +125,7 @@ app.get('/readyz', (_req, res) => {
 });
 
 // ─── API routes ────────────────────────────────────────────────────────────────
+app.use('/api/public', apiLimiter, publicRoutes);
 app.use('/api/auth', apiLimiter, authRoutes);
 app.use('/api/sessions', apiLimiter, sessionsRoutes);
 app.use('/api/charger', apiLimiter, chargerRoutes);

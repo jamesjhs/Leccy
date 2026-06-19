@@ -130,6 +130,11 @@ export const analyticsApi = {
     api.get<AnalyticsResult>('/analytics', { params }),
 };
 
+// ---------- Public ----------
+export const publicApi = {
+  stats: () => api.get<PublicStats>('/public/stats'),
+};
+
 // ---------- Vehicles ----------
 export const vehiclesApi = {
   getAll: () => api.get<{ vehicles: Vehicle[] }>('/vehicles'),
@@ -287,6 +292,13 @@ export interface AnalyticsResult {
   temp_vs_range: TempVsRange[];
   miles_per_pct: MilesPerPct[];
   enriched_sessions: EnrichedSession[];
+}
+
+export interface PublicStats {
+  miles_tracked: number;
+  total_cost_pence: number;
+  sessions_logged: number;
+  cost_per_mile_pence: number;
 }
 
 export interface EnrichedSession {

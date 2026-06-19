@@ -297,6 +297,8 @@ export interface AnalyticsResult {
 export interface PublicStats {
   miles_tracked: number;
   total_cost_pence: number;
+  savings_pence: number;
+  savings_percent: number;
   sessions_logged: number;
   cost_per_mile_pence: number;
 }

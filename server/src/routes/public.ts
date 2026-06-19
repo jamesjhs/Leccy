@@ -3,10 +3,21 @@ import db from '../db/database';
 
 const router = Router();
 
+const DEFAULT_PETROL_PRICE_PPL = 148;
+const TYPICAL_PETROL_MPG = 40;
+const LITRES_PER_GALLON = 4.54609;
+
 interface PublicStatsRow {
   sessions_logged: number;
   total_cost_pence: number | null;
   miles_tracked: number | null;
+}
+
+function fuelCostPence(miles: number, fuelPricePpl: number, mpg: number): number {
+  if (miles <= 0 || mpg <= 0) return 0;
+  const gallons = miles / mpg;
+  const litres = gallons * LITRES_PER_GALLON;
+  return litres * fuelPricePpl;
 }
 
 router.get('/stats', (_req: Request, res: Response): void => {
@@ -47,12 +58,19 @@ router.get('/stats', (_req: Request, res: Response): void => {
 
     const totalCostPence = row.total_cost_pence ?? 0;
     const milesTracked = Math.round((row.miles_tracked ?? 0) * 10) / 10;
+    const petrolCostPence = fuelCostPence(milesTracked, DEFAULT_PETROL_PRICE_PPL, TYPICAL_PETROL_MPG);
+    const savingsPence = Math.max(0, Math.round(petrolCostPence - totalCostPence));
+    const savingsPercent = petrolCostPence > 0
+      ? Math.max(0, Math.round((savingsPence / petrolCostPence) * 100))
+      : 0;
     const costPerMilePence = milesTracked > 0 ? Math.round((totalCostPence / milesTracked) * 10) / 10 : 0;
 
     res.setHeader('Cache-Control', 'public, max-age=300');
     res.json({
       miles_tracked: milesTracked,
       total_cost_pence: totalCostPence,
+      savings_pence: savingsPence,
+      savings_percent: savingsPercent,
       sessions_logged: row.sessions_logged,
       cost_per_mile_pence: costPerMilePence,
     });

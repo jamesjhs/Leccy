@@ -406,7 +406,7 @@ export default function Landing() {
 
   const liveStats = [
     { val: formatInteger(publicStats?.miles_tracked), unit: 'miles tracked', icon: '🛣️' },
-    { val: formatPoundsFromPence(publicStats?.total_cost_pence), unit: 'EV spend tracked', icon: '💷' },
+    { val: formatPoundsFromPence(publicStats?.savings_pence), unit: 'saved by using EVs', icon: '🎉' },
     { val: formatInteger(publicStats?.sessions_logged), unit: 'sessions logged', icon: '🔋' },
     { val: formatPence(publicStats?.cost_per_mile_pence), unit: 'avg cost per mile', icon: '📉' },
   ];

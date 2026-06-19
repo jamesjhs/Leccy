@@ -83,6 +83,7 @@ export default function QuickDataEntry() {
   const [draft, setDraft] = useState<QuickDraft | null>(null);
   const [editingStart, setEditingStart] = useState(false);
   const [startOdometer, setStartOdometer] = useState('');
+  const [odometerFocused, setOdometerFocused] = useState(false);
   const [startPct, setStartPct] = useState('');
   const [startRange, setStartRange] = useState('');
   const [finish, setFinish] = useState<FinishFields>({
@@ -153,12 +154,10 @@ export default function QuickDataEntry() {
     }
   }, [selectedVehicleId]);
 
-  useEffect(() => {
-    const latestOdometer = sessions.find((s) => s.odometer_miles > 0)?.odometer_miles;
-    if (!draft && latestOdometer !== undefined && startOdometer === '') {
-      setStartOdometer(String(latestOdometer));
-    }
-  }, [draft, sessions, startOdometer]);
+  const latestOdometer = useMemo(
+    () => sessions.find((s) => s.odometer_miles > 0)?.odometer_miles,
+    [sessions],
+  );
 
   const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
   const currentTariff = tariffs[0] ?? null;
@@ -417,7 +416,10 @@ export default function QuickDataEntry() {
                     max="999999"
                     step="0.1"
                     inputMode="decimal"
+                    placeholder={!odometerFocused && latestOdometer !== undefined ? `Past: ${latestOdometer}` : ''}
                     value={startOdometer}
+                    onFocus={() => setOdometerFocused(true)}
+                    onBlur={() => setOdometerFocused(false)}
                     onChange={(e) => setStartOdometer(e.target.value)}
                     className={inputClass}
                   />

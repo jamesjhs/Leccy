@@ -32,7 +32,9 @@ interface FinishFields {
   date_unplugged: string;
   charger_type: ChargerType;
   home_kwh: string;
+  home_kwh_source: 'measured' | 'estimated';
   away_kwh: string;
+  away_kwh_source: 'measured' | 'estimated';
   away_price: string;
   away_price_mode: 'total' | 'per_kwh';
 }
@@ -94,7 +96,9 @@ export default function QuickDataEntry() {
     date_unplugged: todayIso(),
     charger_type: 'home',
     home_kwh: '',
+    home_kwh_source: 'measured',
     away_kwh: '',
+    away_kwh_source: 'measured',
     away_price: '',
     away_price_mode: 'total',
   });
@@ -219,9 +223,9 @@ export default function QuickDataEntry() {
 
     const value = String(socEstimatedKwh);
     if (type === 'home') {
-      setFinish((prev) => ({ ...prev, home_kwh: value }));
+      setFinish((prev) => ({ ...prev, home_kwh: value, home_kwh_source: 'estimated' }));
     } else {
-      setFinish((prev) => ({ ...prev, away_kwh: value }));
+      setFinish((prev) => ({ ...prev, away_kwh: value, away_kwh_source: 'estimated' }));
     }
   }
 
@@ -243,6 +247,7 @@ export default function QuickDataEntry() {
     }
 
     const energyKwh = finish.charger_type === 'home' ? homeKwh : awayKwh;
+    const energySource = finish.charger_type === 'home' ? finish.home_kwh_source : finish.away_kwh_source;
     if (energyKwh !== null && (!Number.isFinite(energyKwh) || energyKwh <= 0 || energyKwh > 200)) {
       setError('Enter a valid kWh amount, or leave kWh blank.');
       return;
@@ -282,6 +287,7 @@ export default function QuickDataEntry() {
         await chargerApi.create({
           session_id: sessionRes.data.session.id,
           energy_kwh: energyKwh,
+          energy_source: energySource,
           price_pence: Math.round(pricePounds * 100),
           charger_type: finish.charger_type,
         });
@@ -300,7 +306,9 @@ export default function QuickDataEntry() {
         date_unplugged: todayIso(),
         charger_type: 'home',
         home_kwh: '',
+        home_kwh_source: 'measured',
         away_kwh: '',
+        away_kwh_source: 'measured',
         away_price: '',
         away_price_mode: 'total',
       });
@@ -416,7 +424,7 @@ export default function QuickDataEntry() {
                     max="999999"
                     step="0.1"
                     inputMode="decimal"
-                    placeholder={!odometerFocused && latestOdometer !== undefined ? `Past: ${latestOdometer}` : ''}
+                    placeholder={!odometerFocused && latestOdometer !== undefined ? `Previous: ${latestOdometer}` : ''}
                     value={startOdometer}
                     onFocus={() => setOdometerFocused(true)}
                     onBlur={() => setOdometerFocused(false)}
@@ -551,7 +559,7 @@ export default function QuickDataEntry() {
                       <FormField label="Home kWh">
                         <KwhInput
                           value={finish.home_kwh}
-                          onChange={(value) => setFinish((prev) => ({ ...prev, home_kwh: value }))}
+                          onChange={(value) => setFinish((prev) => ({ ...prev, home_kwh: value, home_kwh_source: 'measured' }))}
                           onEstimate={() => applyKwhEstimate('home')}
                           disabledEstimate={socEstimatedKwh === null}
                         />
@@ -568,7 +576,7 @@ export default function QuickDataEntry() {
                       <FormField label="Away kWh">
                         <KwhInput
                           value={finish.away_kwh}
-                          onChange={(value) => setFinish((prev) => ({ ...prev, away_kwh: value }))}
+                          onChange={(value) => setFinish((prev) => ({ ...prev, away_kwh: value, away_kwh_source: 'measured' }))}
                           onEstimate={() => applyKwhEstimate('public')}
                           disabledEstimate={socEstimatedKwh === null}
                         />

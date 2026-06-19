@@ -1,16 +1,16 @@
-# Leccy — EV Cost Tracker · v1.3.1
+# Leccy — EV Cost Tracker · v1.4.0
 
 A full-stack web application for logging and analysing the cost of charging an electric vehicle. Installs as a native-feeling app on Android (Chrome) and iOS (Safari), with an in-app install prompt where supported.
 
 ## Features
 
-- Log charging sessions with battery %, range, odometer, and temperature data
+- Log charging sessions with battery %, range, odometer, temperature, and CSV paste validation
 - Start a charge quickly from the default Quick Entry page, save it as a local draft, and finish submission later
-- Track home and public charger costs
+- Track home and away charger costs, with measured and estimated kWh kept distinct
 - Maintain a vehicle maintenance log
 - Manage electricity tariffs over time
-- Analytics dashboard with charts (efficiency, cost per session, temperature vs range)
-- **Advanced analytics** — Battery Health Proxy, Thermal Impact, GOM Accuracy, Range Anxiety Gauge, and Charging Habits (v1.1.1)
+- Analytics dashboard with charts for cost, kWh, odometer-based efficiency, temperature effects, and savings
+- **Advanced analytics** — Ownership Intelligence, Home vs Away Economics, Odometer-Based Efficiency, Temperature-Normalised Efficiency, Measured-kWh Usable Capacity Proxy, Data Quality, GOM Accuracy, Range Anxiety Gauge, and Charging Habits (v1.4.0)
 - **Security hardened** — JWT algorithm pinned, production startup guards, SMTP credential masking, production log sanitisation (v1.2.0)
 - **Quick Data Entry** — save charge-start odometer, SOC, and range, then complete end-charge SOC, range, temperature, kWh, and cost later (v1.3.1)
 - **PWA install and update handling** — first-load install prompt where supported, service-worker update checks, and automatic reload when a new app version activates (v1.3.1)
@@ -37,4 +37,4 @@ npm start
 
 ## Version
 
-**1.3.1**
+**1.4.0**

@@ -3,7 +3,7 @@
    Cache-first for static assets, network-first for /api/
    ============================================================ */
 
-const CACHE_NAME = 'leccy-1.3.1';
+const CACHE_NAME = 'leccy-1.4.0';
 
 const STATIC_ASSETS = [
   '/',

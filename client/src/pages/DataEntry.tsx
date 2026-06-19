@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
 import {
   sessionsApi, chargerApi, tariffApi, vehiclesApi,
   ChargingSession, ChargerCostWithDate, TariffConfig, NewSession, Vehicle,
@@ -59,14 +58,34 @@ function calcHomeChargeCost(kwh: number, tariff: TariffConfig): number {
 // ─── Cost draft per session ────────────────────────────────────────────────
 interface CostDraft {
   costId?: number;          // present if already saved to DB
-  type: 'home' | 'public'; // 'public' = Away
+  type: '' | 'home' | 'public'; // 'public' = Away
   kwh: string;
+  energySource: 'measured' | 'estimated';
   price: string;
   isEstimate: boolean;
 }
 
 // ─── Session edits per row ────────────────────────────────────────────────
 type SessionEdit = Partial<Omit<ChargingSession, 'id' | 'user_id' | 'vehicle_id' | 'created_at'>>;
+
+interface CsvRowResult {
+  lineNumber: number;
+  raw: string;
+  values: string[];
+  session?: NewSession;
+  errors: string[];
+}
+
+interface CsvStats {
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  earliestDate: string | null;
+  latestDate: string | null;
+  minOdometer: number | null;
+  maxOdometer: number | null;
+  averageAirTemp: number | null;
+}
 
 // Estimate kWh from range delta * 0.3 kWh/mile, or use historical ratio.
 function estimateKwh(
@@ -79,6 +98,109 @@ function estimateKwh(
   }
   const rangeDelta = Math.max(0, session.final_range_miles - session.initial_range_miles);
   return Math.round(rangeDelta * DEFAULT_KWH_PER_MILE * 100) / 100;
+}
+
+function parseCsvDate(value: string): string | null {
+  const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+}
+
+function parseCsvNumber(value: string): number | null {
+  const cleaned = value.trim().replace(/%$/, '');
+  if (cleaned === '') return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function validateRange(label: string, value: number | null, min: number, max: number, errors: string[]): number {
+  if (value === null) {
+    errors.push(`${label} is not a valid number`);
+    return 0;
+  }
+  if (value < min || value > max) {
+    errors.push(`${label} must be between ${min} and ${max}`);
+  }
+  return value;
+}
+
+function parseSessionCsv(input: string, vehicleId: number | null): CsvRowResult[] {
+  return input
+    .split(/\r?\n/)
+    .map((raw, index) => ({ raw, lineNumber: index + 1 }))
+    .filter((line) => line.raw.trim() !== '')
+    .map(({ raw, lineNumber }) => {
+      const values = raw.split(',').map((part) => part.trim());
+      const errors: string[] = [];
+
+      if (values.length !== 7) {
+        errors.push(`Expected 7 comma-separated fields, found ${values.length}`);
+      }
+
+      const [odoRaw = '', initPctRaw = '', initRangeRaw = '', finalPctRaw = '', finalRangeRaw = '', airTempRaw = '', dateRaw = ''] = values;
+      const date = parseCsvDate(dateRaw);
+      if (!date) errors.push('Date must be dd/mm/yyyy');
+
+      const odometer = validateRange('Odometer', parseCsvNumber(odoRaw), 0, 999999, errors);
+      const initialPct = validateRange('Initial battery %', parseCsvNumber(initPctRaw), 0, 100, errors);
+      const initialRange = validateRange('Initial range', parseCsvNumber(initRangeRaw), 0, 1000, errors);
+      const finalPct = validateRange('Final battery %', parseCsvNumber(finalPctRaw), 0, 100, errors);
+      const finalRange = validateRange('Final range', parseCsvNumber(finalRangeRaw), 0, 1000, errors);
+      const airTemp = validateRange('Air temperature', parseCsvNumber(airTempRaw), -60, 60, errors);
+
+      if (finalPct < initialPct) errors.push('Final battery % is lower than initial battery %');
+      if (finalRange < initialRange) errors.push('Final range is lower than initial range');
+
+      return {
+        lineNumber,
+        raw,
+        values,
+        errors,
+        session: errors.length === 0 && date
+          ? {
+              vehicle_id: vehicleId,
+              odometer_miles: odometer,
+              initial_battery_pct: initialPct,
+              initial_range_miles: initialRange,
+              final_battery_pct: finalPct,
+              final_range_miles: finalRange,
+              air_temp_celsius: airTemp,
+              date_unplugged: date,
+            }
+          : undefined,
+      };
+    });
+}
+
+function buildCsvStats(rows: CsvRowResult[]): CsvStats {
+  const valid = rows.filter((row) => row.session);
+  const dates = valid.map((row) => row.session!.date_unplugged).sort();
+  const odometers = valid.map((row) => row.session!.odometer_miles);
+  const temps = valid.map((row) => row.session!.air_temp_celsius);
+
+  return {
+    totalRows: rows.length,
+    validRows: valid.length,
+    invalidRows: rows.length - valid.length,
+    earliestDate: dates[0] ?? null,
+    latestDate: dates[dates.length - 1] ?? null,
+    minOdometer: odometers.length > 0 ? Math.min(...odometers) : null,
+    maxOdometer: odometers.length > 0 ? Math.max(...odometers) : null,
+    averageAirTemp: temps.length > 0
+      ? Math.round((temps.reduce((sum, temp) => sum + temp, 0) / temps.length) * 10) / 10
+      : null,
+  };
 }
 
 export default function DataEntry() {
@@ -95,24 +217,15 @@ export default function DataEntry() {
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  // Optional charger cost fields on the entry form
-  const [formChargerType, setFormChargerType] = useState<'home' | 'public'>('home');
-  const [formKwh, setFormKwh] = useState('');
-  const [formCost, setFormCost] = useState('');
+  const [csvText, setCsvText] = useState('');
+  const [csvRows, setCsvRows] = useState<CsvRowResult[]>([]);
+  const [csvStats, setCsvStats] = useState<CsvStats | null>(null);
+  const [hasTestedCsv, setHasTestedCsv] = useState(false);
+  const [showEstimateKwhConfirm, setShowEstimateKwhConfirm] = useState(false);
 
   // Keep latest tariff and historical ratio available in callbacks
   const tariffRef = useRef<TariffConfig | null>(null);
   const historicalRatioRef = useRef<number | null>(null);
-
-  const today = new Date().toISOString().split('T')[0];
-
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<NewSession>({ defaultValues: { date_unplugged: today } });
 
   // ─── Build drafts from fetched data ──────────────────────────────────────
   const buildDrafts = useCallback(
@@ -148,19 +261,17 @@ export default function DataEntry() {
             costId: existing.id,
             type: existing.charger_type,
             kwh: String(existing.energy_kwh),
+            energySource: existing.energy_source ?? 'measured',
             price: (existing.price_pence / 100).toFixed(2),
             isEstimate: false,
           };
         } else {
-          const estKwh = estimateKwh(s, historicalRatio);
-          const estPrice = currentTariff
-            ? calcHomeChargeCost(estKwh, currentTariff)
-            : 0;
           drafts[s.id] = {
-            type: 'home',
-            kwh: String(estKwh),
-            price: estPrice.toFixed(2),
-            isEstimate: true,
+            type: '',
+            kwh: '',
+            energySource: 'measured',
+            price: '',
+            isEstimate: false,
           };
         }
       }
@@ -195,60 +306,64 @@ export default function DataEntry() {
 
   useEffect(() => { void loadData(); }, [loadData]);
 
-  // ─── Session form submit ──────────────────────────────────────────────────
-  async function onSubmit(data: NewSession) {
+  useEffect(() => {
+    setCsvRows([]);
+    setCsvStats(null);
+    setHasTestedCsv(false);
+  }, [selectedVehicleId]);
+
+  function testCsv() {
     setFormError(null);
     setFormSuccess(null);
+    const rows = parseSessionCsv(csvText, selectedVehicleId);
+    const stats = buildCsvStats(rows);
+    setCsvRows(rows);
+    setCsvStats(stats);
+    setHasTestedCsv(true);
+
+    if (stats.totalRows === 0) {
+      setFormError('Paste at least one CSV row before testing.');
+    } else if (stats.invalidRows > 0) {
+      setFormError(`${stats.invalidRows} row${stats.invalidRows === 1 ? '' : 's'} need attention before submit.`);
+    } else {
+      setFormSuccess(`${stats.validRows} valid row${stats.validRows === 1 ? '' : 's'} ready to submit.`);
+    }
+  }
+
+  async function submitCsvRows() {
+    setFormError(null);
+    setFormSuccess(null);
+    const rows = hasTestedCsv ? csvRows : parseSessionCsv(csvText, selectedVehicleId);
+    const stats = buildCsvStats(rows);
+    setCsvRows(rows);
+    setCsvStats(stats);
+    setHasTestedCsv(true);
+
+    if (stats.totalRows === 0) {
+      setFormError('Paste at least one CSV row before submitting.');
+      return;
+    }
+    if (stats.invalidRows > 0) {
+      setFormError('Fix the highlighted rows before submitting.');
+      return;
+    }
+
+    const validSessions = rows.flatMap((row) => (row.session ? [row.session] : []));
     setSubmitting(true);
     try {
-      const sessRes = await sessionsApi.create({
-        ...data,
-        vehicle_id: selectedVehicleId ?? null,
-        odometer_miles: Number(data.odometer_miles),
-        initial_battery_pct: Number(data.initial_battery_pct),
-        initial_range_miles: Number(data.initial_range_miles),
-        final_battery_pct: Number(data.final_battery_pct),
-        final_range_miles: Number(data.final_range_miles),
-        air_temp_celsius: Number(data.air_temp_celsius),
-      });
-
-      // Auto-create charger cost. Use form-entered values when provided,
-      // otherwise estimate from session data and current tariff.
-      const newSession = sessRes.data.session;
-      const rangeDelta = Math.max(
-        0,
-        Number(data.final_range_miles) - Number(data.initial_range_miles),
-      );
-      const autoKwh = Math.round(rangeDelta * DEFAULT_KWH_PER_MILE * 100) / 100;
-      const kwh = formKwh && Number(formKwh) > 0 ? Number(formKwh) : autoKwh;
-      const currentTariff = tariffRef.current;
-      const autoPricePence = currentTariff
-        ? Math.round(calcHomeChargeCost(kwh, currentTariff) * 100)
-        : 0;
-      const pricePence =
-        formCost && Number(formCost) >= 0
-          ? Math.round(Number(formCost) * 100)
-          : autoPricePence;
-
-      if (kwh > 0) {
-        await chargerApi.create({
-          session_id: newSession.id,
-          energy_kwh: kwh,
-          price_pence: pricePence,
-          charger_type: formChargerType,
-        });
+      for (const session of validSessions) {
+        await sessionsApi.create(session);
       }
-
-      setFormSuccess('Session saved!');
-      reset({ date_unplugged: today });
-      setFormKwh('');
-      setFormCost('');
-      setFormChargerType('home');
+      setFormSuccess(`${validSessions.length} charging session${validSessions.length === 1 ? '' : 's'} imported.`);
+      setCsvText('');
+      setCsvRows([]);
+      setCsvStats(null);
+      setHasTestedCsv(false);
       void loadData();
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to save session';
+        'Failed to import sessions.';
       setFormError(msg);
     } finally {
       setSubmitting(false);
@@ -270,6 +385,7 @@ export default function DataEntry() {
 
     const kwh = Number(draft.kwh);
     const pricePence = Math.round(Number(draft.price) * 100);
+    if (draft.type === '') return;
     if (!isFinite(kwh) || kwh <= 0 || !isFinite(pricePence) || pricePence < 0) return;
 
     setSavingId(sessionId);
@@ -289,6 +405,7 @@ export default function DataEntry() {
       if (draft.costId) {
         await chargerApi.update(draft.costId, {
           energy_kwh: kwh,
+          energy_source: draft.energySource,
           price_pence: pricePence,
           charger_type: draft.type,
         });
@@ -296,6 +413,7 @@ export default function DataEntry() {
         const res = await chargerApi.create({
           session_id: sessionId,
           energy_kwh: kwh,
+          energy_source: draft.energySource,
           price_pence: pricePence,
           charger_type: draft.type,
         });
@@ -370,6 +488,30 @@ export default function DataEntry() {
     }
   }
 
+  function estimateKwhInputs() {
+    setCostDrafts((prev) => {
+      const next = { ...prev };
+      for (const s of sessions) {
+        const vehicle = vehicles.find((v) => v.id === (s.vehicle_id ?? selectedVehicleId));
+        if (!vehicle?.battery_kwh) continue;
+
+        const pctCharged = s.final_battery_pct - s.initial_battery_pct;
+        if (pctCharged <= 0) continue;
+
+        const estimatedKwh = Math.round(vehicle.battery_kwh * (pctCharged / 100) * 100) / 100;
+        const current = next[s.id] ?? { type: '', kwh: '', energySource: 'measured', price: '', isEstimate: false };
+        next[s.id] = {
+          ...current,
+          kwh: String(estimatedKwh),
+          energySource: 'estimated',
+          isEstimate: true,
+        };
+      }
+      return next;
+    });
+    setShowEstimateKwhConfirm(false);
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-green-900 mb-6">Add Charging Session</h1>
@@ -418,139 +560,104 @@ export default function DataEntry() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <FormField label="Odometer (miles)" error={errors.odometer_miles?.message}>
-              <input
-                type="number" step="0.1" min="0" max="999999" inputMode="decimal"
-                className={inputClass}
-                {...register('odometer_miles', {
-                  required: 'Required',
-                  min: { value: 0, message: 'Must be ≥ 0' },
-                  max: { value: 999999, message: 'Value too large' },
-                  validate: (v) => isFinite(Number(v)) || 'Must be a valid number',
-                })}
-              />
-            </FormField>
-
-            <FormField label="Air Temperature (°C)" error={errors.air_temp_celsius?.message}>
-              <input
-                type="number" step="0.1" min="-60" max="60" inputMode="decimal"
-                className={inputClass}
-                {...register('air_temp_celsius', {
-                  required: 'Required',
-                  min: { value: -60, message: 'Below expected range' },
-                  max: { value: 60, message: 'Above expected range' },
-                  validate: (v) => isFinite(Number(v)) || 'Must be a valid number',
-                })}
-              />
-            </FormField>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-            <FormField label="Init Battery %" error={errors.initial_battery_pct?.message}>
-              <input
-                type="number" min="0" max="100" step="1" inputMode="numeric"
-                className={inputClass}
-                {...register('initial_battery_pct', {
-                  required: 'Required',
-                  min: { value: 0, message: '0–100' },
-                  max: { value: 100, message: '0–100' },
-                })}
-              />
-            </FormField>
-
-            <FormField label="Init Range (mi)" error={errors.initial_range_miles?.message}>
-              <input
-                type="number" step="0.1" min="0" max="1000" inputMode="decimal"
-                className={inputClass}
-                {...register('initial_range_miles', {
-                  required: 'Required',
-                  min: { value: 0, message: 'Must be ≥ 0' },
-                  max: { value: 1000, message: 'Value too large' },
-                })}
-              />
-            </FormField>
-
-            <FormField label="Final Battery %" error={errors.final_battery_pct?.message}>
-              <input
-                type="number" min="0" max="100" step="1" inputMode="numeric"
-                className={inputClass}
-                {...register('final_battery_pct', {
-                  required: 'Required',
-                  min: { value: 0, message: '0–100' },
-                  max: { value: 100, message: '0–100' },
-                })}
-              />
-            </FormField>
-
-            <FormField label="Final Range (mi)" error={errors.final_range_miles?.message}>
-              <input
-                type="number" step="0.1" min="0" max="1000" inputMode="decimal"
-                className={inputClass}
-                {...register('final_range_miles', {
-                  required: 'Required',
-                  min: { value: 0, message: 'Must be ≥ 0' },
-                  max: { value: 1000, message: 'Value too large' },
-                })}
-              />
-            </FormField>
-          </div>
-
-          <FormField label="Date Unplugged" error={errors.date_unplugged?.message}>
-            <input
-              type="date" className={`${inputClass} max-w-xs`}
-              {...register('date_unplugged', { required: 'Required' })}
-            />
-          </FormField>
-
-          {/* ── Optional charger cost section ──────────────────────────── */}
-          <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-              Charger cost <span className="font-normal normal-case text-gray-400">(optional — auto-estimated if left blank)</span>
+        <div className="space-y-5">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              Paste charging sessions CSV
+            </label>
+            <p className="text-sm text-gray-500 mb-3">
+              Paste CSV-formatted charging session data here. Note, because of the potential for different types of charging sessions and costs, inputted sessions will appear in the table below without charge type or kwh or cost values, so these must be manually entered using the table below.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Type</label>
-                <select
-                  value={formChargerType}
-                  onChange={(e) => setFormChargerType(e.target.value as 'home' | 'public')}
-                  className={inputClass}
-                >
-                  <option value="home">🏠 Home</option>
-                  <option value="public">⚡ Away</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Energy (kWh)</label>
-                <input
-                  type="number" step="0.01" min="0" max="200" inputMode="decimal"
-                  placeholder="Auto"
-                  value={formKwh}
-                  onChange={(e) => setFormKwh(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Cost (£)</label>
-                <input
-                  type="number" step="0.01" min="0" max="10000" inputMode="decimal"
-                  placeholder="Auto"
-                  value={formCost}
-                  onChange={(e) => setFormCost(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-            </div>
+            <textarea
+              rows={8}
+              value={csvText}
+              onChange={(e) => {
+                setCsvText(e.target.value);
+                setCsvRows([]);
+                setCsvStats(null);
+                setHasTestedCsv(false);
+                setFormError(null);
+                setFormSuccess(null);
+              }}
+              placeholder="odo,init%,initRng,Final%,FinalRng,AirTemp,dd/mm/yyyy&#10;17200,22,64,100,238,12,15/04/2026"
+              className={`${inputClass} font-mono resize-y`}
+            />
+            <p className="text-xs text-gray-400 mt-2">
+              Format: odo,init%,initRng,Final%,FinalRng,AirTemp,dd/mm/yyyy.
+            </p>
           </div>
 
-          <button
-            type="submit" disabled={submitting}
-            className="bg-green-700 hover:bg-green-600 disabled:bg-green-400 text-white font-bold px-6 py-2.5 rounded-lg transition-colors text-sm"
-          >
-            {submitting ? 'Saving…' : 'Save Session'}
-          </button>
-        </form>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={testCsv}
+              className="bg-white hover:bg-green-50 border border-green-300 text-green-800 font-bold px-5 py-2.5 rounded-lg transition-colors text-sm"
+            >
+              Test
+            </button>
+            <button
+              type="button"
+              onClick={() => void submitCsvRows()}
+              disabled={submitting || !hasTestedCsv || (csvStats?.invalidRows ?? 1) > 0 || (csvStats?.validRows ?? 0) === 0}
+              className="bg-green-700 hover:bg-green-600 disabled:bg-green-400 text-white font-bold px-6 py-2.5 rounded-lg transition-colors text-sm"
+            >
+              {submitting ? 'Importing…' : 'Submit'}
+            </button>
+          </div>
+
+          {csvStats && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <CsvStat label="Rows" value={`${csvStats.totalRows}`} />
+              <CsvStat label="Valid" value={`${csvStats.validRows}`} />
+              <CsvStat label="Errors" value={`${csvStats.invalidRows}`} tone={csvStats.invalidRows > 0 ? 'error' : 'normal'} />
+              <CsvStat
+                label="Date Range"
+                value={csvStats.earliestDate && csvStats.latestDate ? `${csvStats.earliestDate} to ${csvStats.latestDate}` : '—'}
+              />
+              <CsvStat
+                label="Odometer Range"
+                value={csvStats.minOdometer !== null && csvStats.maxOdometer !== null ? `${csvStats.minOdometer} to ${csvStats.maxOdometer} mi` : '—'}
+              />
+              <CsvStat
+                label="Avg Temp"
+                value={csvStats.averageAirTemp !== null ? `${csvStats.averageAirTemp}°C` : '—'}
+              />
+            </div>
+          )}
+
+          {csvRows.length > 0 && (
+            <div className="overflow-x-auto border border-green-100 rounded-lg">
+              <table className="w-full text-xs min-w-[860px]">
+                <thead className="bg-green-50 text-green-800">
+                  <tr>
+                    <th className="text-left px-3 py-2">Line</th>
+                    <th className="text-left px-3 py-2">Odo</th>
+                    <th className="text-left px-3 py-2">Init%</th>
+                    <th className="text-left px-3 py-2">Init Range</th>
+                    <th className="text-left px-3 py-2">Final%</th>
+                    <th className="text-left px-3 py-2">Final Range</th>
+                    <th className="text-left px-3 py-2">Air Temp</th>
+                    <th className="text-left px-3 py-2">Date</th>
+                    <th className="text-left px-3 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {csvRows.map((row) => (
+                    <tr key={row.lineNumber} className={`border-t ${row.errors.length > 0 ? 'bg-red-50' : 'bg-white'}`}>
+                      <td className="px-3 py-2 font-mono">{row.lineNumber}</td>
+                      {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                        <td key={i} className="px-3 py-2 font-mono">{row.values[i] ?? ''}</td>
+                      ))}
+                      <td className={`px-3 py-2 ${row.errors.length > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                        {row.errors.length > 0 ? row.errors.join('; ') : 'Ready'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Sessions + inline charger costs ──────────────────────────────── */}
@@ -558,19 +665,29 @@ export default function DataEntry() {
         <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
           <h2 className="text-lg font-bold text-green-900">Charging Sessions</h2>
           {sessions.length > 0 && (
-            <button
-              type="button"
-              onClick={() => void autoEnumerateCosts()}
-              disabled={enumerating || !tariffRef.current}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-50 transition-colors whitespace-nowrap"
-              title="Calculate and save home charge costs for all rows currently showing £0.00"
-            >
-              {enumerating ? '⏳ Calculating…' : '⚡ Auto-enumerate costs'}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setShowEstimateKwhConfirm(true)}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-green-300 text-green-700 hover:bg-green-50 transition-colors whitespace-nowrap"
+                title="Estimate kWh from state of charge gained and vehicle battery size"
+              >
+                Estimate kWh
+              </button>
+              <button
+                type="button"
+                onClick={() => void autoEnumerateCosts()}
+                disabled={enumerating || !tariffRef.current}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-50 transition-colors whitespace-nowrap"
+                title="Calculate and save home charge costs for all rows currently showing £0.00"
+              >
+                {enumerating ? '⏳ Calculating…' : '⚡ Auto-enumerate costs'}
+              </button>
+            </div>
           )}
         </div>
         <p className="text-xs text-gray-400 mb-4">
-          Charger cost columns show <span className="italic">estimated</span> values until you save them manually.
+          Charger cost columns stay blank until you choose Home or Away, enter kWh and cost, then save them manually.
         </p>
 
         {sessions.length === 0 ? (
@@ -590,7 +707,7 @@ export default function DataEntry() {
                   <th className="pb-2 pr-2 border-l border-green-100 pl-3">Type</th>
                   <th className="pb-2 pr-2" aria-label="Energy (kWh)">kWh</th>
                   <th className="pb-2 pr-2" aria-label="Cost (£)">£</th>
-                  <th className="pb-2" colSpan={2}></th>
+                  <th className="pb-2 w-16" aria-label="Actions"></th>
                 </tr>
               </thead>
               <tbody>
@@ -614,7 +731,7 @@ export default function DataEntry() {
                           type="number" step="0.1" min="0" max="999999"
                           value={edit.odometer_miles ?? s.odometer_miles}
                           onChange={(e) => patchSessionEdit(s.id, { odometer_miles: Number(e.target.value) })}
-                          className={`${rowInputClass} w-24`}
+                          className={`${rowInputClass} w-[89px]`}
                         />
                       </td>
                       <td className="py-2 pr-1">
@@ -622,7 +739,7 @@ export default function DataEntry() {
                           type="number" min="0" max="100" step="1"
                           value={edit.initial_battery_pct ?? s.initial_battery_pct}
                           onChange={(e) => patchSessionEdit(s.id, { initial_battery_pct: Number(e.target.value) })}
-                          className={`${rowInputClass} w-14`}
+                          className={`${rowInputClass} w-[49px]`}
                         />
                       </td>
                       <td className="py-2 pr-1">
@@ -630,7 +747,7 @@ export default function DataEntry() {
                           type="number" step="0.1" min="0" max="1000"
                           value={edit.initial_range_miles ?? s.initial_range_miles}
                           onChange={(e) => patchSessionEdit(s.id, { initial_range_miles: Number(e.target.value) })}
-                          className={`${rowInputClass} w-16`}
+                          className={`${rowInputClass} w-[57px]`}
                         />
                       </td>
                       <td className="py-2 pr-1">
@@ -638,7 +755,7 @@ export default function DataEntry() {
                           type="number" min="0" max="100" step="1"
                           value={edit.final_battery_pct ?? s.final_battery_pct}
                           onChange={(e) => patchSessionEdit(s.id, { final_battery_pct: Number(e.target.value) })}
-                          className={`${rowInputClass} w-14`}
+                          className={`${rowInputClass} w-[49px]`}
                         />
                       </td>
                       <td className="py-2 pr-1">
@@ -646,7 +763,7 @@ export default function DataEntry() {
                           type="number" step="0.1" min="0" max="1000"
                           value={edit.final_range_miles ?? s.final_range_miles}
                           onChange={(e) => patchSessionEdit(s.id, { final_range_miles: Number(e.target.value) })}
-                          className={`${rowInputClass} w-16`}
+                          className={`${rowInputClass} w-[57px]`}
                         />
                       </td>
                       <td className="py-2 pr-1">
@@ -654,17 +771,18 @@ export default function DataEntry() {
                           type="number" step="0.1" min="-60" max="60"
                           value={edit.air_temp_celsius ?? s.air_temp_celsius}
                           onChange={(e) => patchSessionEdit(s.id, { air_temp_celsius: Number(e.target.value) })}
-                          className={`${rowInputClass} w-14`}
+                          className={`${rowInputClass} w-[49px]`}
                         />
                       </td>
 
                       {/* ── Inline cost cells ── */}
                       <td className="py-2 pr-2 border-l border-green-100 pl-3">
                         <select
-                          value={draft?.type ?? 'home'}
-                          onChange={(e) => patchDraft(s.id, { type: e.target.value as 'home' | 'public' })}
+                          value={draft?.type ?? ''}
+                          onChange={(e) => patchDraft(s.id, { type: e.target.value as '' | 'home' | 'public' })}
                           className="border border-gray-200 rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-500"
                         >
+                          <option value="">—</option>
                           <option value="home">🏠 Home</option>
                           <option value="public">⚡ Away</option>
                         </select>
@@ -673,7 +791,7 @@ export default function DataEntry() {
                         <input
                           type="number" step="0.01" min="0" max="200"
                           value={draft?.kwh ?? ''}
-                          onChange={(e) => patchDraft(s.id, { kwh: e.target.value })}
+                          onChange={(e) => patchDraft(s.id, { kwh: e.target.value, energySource: 'measured', isEstimate: false })}
                           className={`w-20 border rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-500 ${draft?.isEstimate ? 'border-dashed border-gray-300 text-gray-400 italic' : 'border-gray-200'}`}
                         />
                       </td>
@@ -685,21 +803,23 @@ export default function DataEntry() {
                           className={`w-20 border rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-500 ${draft?.isEstimate ? 'border-dashed border-gray-300 text-gray-400 italic' : 'border-gray-200'}`}
                         />
                       </td>
-                      <td className="py-2 pr-1">
+                      <td className="py-2 pl-1">
                         <button
                           onClick={() => saveRow(s.id)}
                           disabled={isSaving}
-                          className="text-xs font-medium px-2 py-1 rounded transition-colors whitespace-nowrap text-blue-500 hover:text-blue-700 disabled:opacity-50"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-full text-green-600 hover:bg-green-100 hover:text-green-800 disabled:opacity-50"
+                          aria-label="Save row"
+                          title="Save"
                         >
-                          {isSaving ? '…' : 'Save'}
+                          {isSaving ? '…' : '✓'}
                         </button>
-                      </td>
-                      <td className="py-2 pl-1">
                         <button
                           onClick={() => deleteSession(s.id)}
-                          className="text-red-400 hover:text-red-600 text-xs font-medium transition-colors"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-full text-red-500 hover:bg-red-100 hover:text-red-700"
+                          aria-label="Delete row"
+                          title="Delete"
                         >
-                          Delete
+                          ×
                         </button>
                       </td>
                     </tr>
@@ -722,6 +842,33 @@ export default function DataEntry() {
           </div>
         )}
       </div>
+
+      {showEstimateKwhConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-green-100 max-w-sm w-full p-5">
+            <h2 className="text-lg font-bold text-green-900 mb-2">Estimate kWh?</h2>
+            <p className="text-sm text-gray-600 mb-5">
+              this will affect charge efficiency calculations
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => estimateKwhInputs()}
+                className="bg-green-700 hover:bg-green-600 text-white font-semibold px-4 py-2 rounded-lg text-sm"
+              >
+                OK
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowEstimateKwhConfirm(false)}
+                className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-semibold px-4 py-2 rounded-lg text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -732,20 +879,13 @@ const inputClass =
 const rowInputClass =
   'w-28 border border-gray-200 rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-500';
 
-function FormField({
-  label,
-  error,
-  children,
-}: {
-  label: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
+function CsvStat({ label, value, tone = 'normal' }: { label: string; value: string; tone?: 'normal' | 'error' }) {
   return (
-    <div>
-      <label className="block text-sm font-semibold text-gray-700 mb-1">{label}</label>
-      {children}
-      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+    <div className={`rounded-lg border px-3 py-2 ${tone === 'error' ? 'border-red-200 bg-red-50' : 'border-green-100 bg-green-50'}`}>
+      <div className={`text-[11px] font-semibold uppercase tracking-wide ${tone === 'error' ? 'text-red-700' : 'text-green-700'}`}>
+        {label}
+      </div>
+      <div className="text-sm font-semibold text-green-950 mt-0.5">{value}</div>
     </div>
   );
 }

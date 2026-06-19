@@ -18,7 +18,7 @@ export default function UserManual({ onClose }: UserManualProps) {
         </div>
 
         <div className="overflow-y-auto px-6 py-4 text-sm text-gray-700 space-y-5">
-          <p className="text-xs text-gray-500">Leccy v1.1.1 · EV Cost Tracker</p>
+          <p className="text-xs text-gray-500">Leccy v1.4.0 · EV Cost Tracker</p>
 
           {/* ── Getting started ── */}
           <section>
@@ -59,37 +59,33 @@ export default function UserManual({ onClose }: UserManualProps) {
 
           {/* ── Logging sessions ── */}
           <section>
-            <h3 className="font-semibold text-green-700 mb-2">3. Logging a charging session</h3>
+            <h3 className="font-semibold text-green-700 mb-2">3. Logging charging sessions</h3>
             <p className="mb-1">
-              Go to <em>Data Entry</em> and fill in the <em>Charging Session</em> form:
+              Use <em>Quick Entry</em> for one charge at a time, or <em>Data Entry</em> when you
+              want to paste several sessions from CSV.
             </p>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong>Vehicle:</strong> select the vehicle you charged (or leave blank for "any").</li>
-              <li><strong>Date unplugged:</strong> the date you finished charging.</li>
-              <li><strong>Odometer (miles):</strong> current mileage at the time of unplugging.</li>
-              <li><strong>Battery % before / after:</strong> the state of charge before you plugged in and after you unplugged.</li>
-              <li><strong>Range before / after (miles):</strong> the estimated range shown on the dashboard before and after charging.</li>
-              <li><strong>Air temperature (°C):</strong> the ambient temperature — this helps analyse how temperature affects range.</li>
+              <li><strong>Quick Entry:</strong> save charge-start odometer, battery percentage, and displayed range, then finish the session after unplugging.</li>
+              <li><strong>CSV Data Entry:</strong> paste rows in the format <code>odo,init%,initRng,Final%,FinalRng,AirTemp,dd/mm/yyyy</code>.</li>
+              <li><strong>Test before submit:</strong> the <em>Test</em> button validates rows, highlights errors, and shows basic statistics before import.</li>
+              <li><strong>Imported sessions:</strong> CSV imports create charging sessions only. Charge type, kWh, and cost are left blank so you can enter the measured charger data yourself.</li>
             </ul>
-            <p className="mt-2">
-              After saving the session you can optionally log the <strong>charger cost</strong> for
-              that session (see section 4).
-            </p>
           </section>
 
           {/* ── Charger costs ── */}
           <section>
             <h3 className="font-semibold text-green-700 mb-2">4. Logging charger costs</h3>
             <p className="mb-1">
-              In <em>Data Entry</em>, under <em>Charger Cost</em>, link a cost record to an existing
-              session:
+              In <em>Data Entry</em>, use the charging sessions table to add or update kWh and
+              cost data for each session:
             </p>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong>Session:</strong> pick the session this cost belongs to.</li>
-              <li><strong>Energy (kWh):</strong> how many kilowatt-hours were added.</li>
+              <li><strong>Charge type:</strong> choose <em>Home</em> or <em>Away</em> when you know where the session happened.</li>
+              <li><strong>Energy (kWh):</strong> enter the charger-reported energy whenever possible.</li>
               <li><strong>Cost (pence):</strong> the total amount paid in pence (e.g. 1200 = £12.00).</li>
-              <li><strong>Charger type:</strong> <em>Home</em> or <em>Public</em>.</li>
-              <li><strong>Charger name</strong> (optional): e.g. "Pod Point driveway" or "Osprey A1 services".</li>
+              <li><strong>Estimate kWh:</strong> this optional button estimates kWh from SOC gained × vehicle battery size, after warning that it will affect charge-efficiency calculations.</li>
+              <li><strong>Measured vs estimated:</strong> Leccy records whether kWh came from the charger or from an estimate, and uses that in analytics and data-quality checks.</li>
+              <li><strong>Save or delete:</strong> use the green tick to save row edits, or the red X to delete a record.</li>
             </ul>
           </section>
 
@@ -130,22 +126,37 @@ export default function UserManual({ onClose }: UserManualProps) {
             <ul className="list-disc pl-5 space-y-1">
               <li><strong>Total cost &amp; cost per mile:</strong> overall spend and efficiency.</li>
               <li><strong>Total kWh &amp; miles driven:</strong> aggregate usage figures.</li>
-              <li><strong>Cost per session:</strong> bar chart of charging costs over time.</li>
-              <li><strong>Battery efficiency:</strong> how much range you get per charge.</li>
+              <li><strong>Costs and kWh per session:</strong> separate charts with All, Home, and Away filters.</li>
+              <li><strong>Battery efficiency:</strong> kWh per mile, with points more than two standard deviations from the mean excluded.</li>
               <li><strong>Temperature vs range:</strong> shows how cold weather affects your EV's range.</li>
               <li><strong>Miles per % battery:</strong> tracks how many miles you get from each percentage point of charge.</li>
             </ul>
-            <p className="mt-2 mb-1 font-semibold text-green-700">Advanced Insight Charts (v1.1.1)</p>
+            <p className="mt-2 mb-1 font-semibold text-green-700">Advanced analytics (v1.4.0)</p>
             <ul className="list-disc pl-5 space-y-1">
               <li>
-                <strong>Battery Health Proxy:</strong> plots your car's projected full-charge range
-                against odometer reading. A falling trendline indicates real-world battery degradation
-                over time.
+                <strong>Ownership Intelligence:</strong> compares your EV spend with a typical petrol-car
+                cost over the same odometer miles, including estimated savings and percentage saved.
               </li>
               <li>
-                <strong>Thermal Impact on Charging:</strong> scatter chart showing how outside
-                temperature affects how much energy is added per session. Point opacity reflects
-                your starting battery level.
+                <strong>Odometer-Based Efficiency:</strong> uses odometer differences between charges as
+                the measured distance travelled between sessions.
+              </li>
+              <li>
+                <strong>Temperature-Normalised Efficiency:</strong> groups kWh-per-mile performance by
+                ambient temperature band so cold-weather effects are easier to see.
+              </li>
+              <li>
+                <strong>Measured-kWh Usable Capacity Proxy:</strong> compares charger-recorded kWh with
+                SOC gained. This is a proxy, not a lab battery-health test, and is strongest when kWh is
+                recorded from the charger rather than estimated.
+              </li>
+              <li>
+                <strong>Home vs Away Economics:</strong> separates charging cost, kWh, and cost-per-mile
+                behaviour by charge type.
+              </li>
+              <li>
+                <strong>Data Quality:</strong> shows how much of your dataset has odometer continuity,
+                measured kWh, temperatures, vehicle links, and charge-type labels.
               </li>
               <li>
                 <strong>GOM Accuracy:</strong> compares the car's estimated range consumed against

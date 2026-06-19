@@ -1,11 +1,11 @@
-# Leccy — EV Cost Tracker v1.3.1: Technical Manual
+# Leccy — EV Cost Tracker v1.4.0: Technical Manual
 
 ## Architecture Overview
 
 Leccy is a full-stack TypeScript application composed of:
 
 - **Backend:** Node.js + Express REST API with better-sqlite3 (synchronous SQLite)
-- **Frontend:** React SPA with Vite, React Router v6, Tailwind CSS, Recharts
+- **Frontend:** React SPA with Vite, React Router v6, Tailwind CSS, custom SVG chart components
 - **Database:** SQLite3 (single file, stored at `DB_PATH`)
 - **Auth:** JWT Bearer token (stored in `localStorage` on client; sent via `Authorization: Bearer` header)
 
@@ -55,6 +55,7 @@ Leccy is a full-stack TypeScript application composed of:
 |---|---|---|
 | `id` | INTEGER PK | |
 | `user_id` | INTEGER FK | → users.id CASCADE |
+| `vehicle_id` | INTEGER FK | → vehicles.id SET NULL |
 | `odometer_miles` | REAL | |
 | `initial_battery_pct` | REAL | 0–100 |
 | `initial_range_miles` | REAL | |
@@ -63,6 +64,17 @@ Leccy is a full-stack TypeScript application composed of:
 | `air_temp_celsius` | REAL | |
 | `date_started` | TEXT | Optional ISO date (YYYY-MM-DD) |
 | `date_unplugged` | TEXT | ISO date (YYYY-MM-DD) |
+| `created_at` | TEXT | ISO datetime |
+
+### `vehicles`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK | |
+| `user_id` | INTEGER FK | → users.id CASCADE |
+| `licence_plate` | TEXT | Uppercase, spaces stripped |
+| `nickname` | TEXT | Nullable |
+| `vehicle_type` | TEXT | Nullable |
+| `battery_kwh` | REAL | Nullable; used for SOC-derived kWh estimates |
 | `created_at` | TEXT | ISO datetime |
 
 ### `charger_costs`
@@ -75,6 +87,7 @@ Leccy is a full-stack TypeScript application composed of:
 | `price_pence` | INTEGER | Stored as integer pence |
 | `charger_type` | TEXT | `'home'` or `'public'` |
 | `charger_name` | TEXT | Nullable |
+| `energy_source` | TEXT | `'measured'` or `'estimated'`; defaults to `'measured'` |
 | `created_at` | TEXT | ISO datetime |
 
 ### `maintenance_log`
@@ -95,6 +108,9 @@ Leccy is a full-stack TypeScript application composed of:
 | `tariff_name` | TEXT | |
 | `rate_pence_per_kwh` | REAL | Pence per kWh |
 | `standing_charge_pence` | REAL | Pence per day |
+| `peak_start_time` | TEXT | 24-hour HH:mm |
+| `off_peak_rate_pence_per_kwh` | REAL | Nullable; pence per kWh |
+| `off_peak_start_time` | TEXT | Nullable; 24-hour HH:mm |
 | `effective_from` | TEXT | ISO date |
 | `created_at` | TEXT | |
 
@@ -162,7 +178,8 @@ Leccy is a full-stack TypeScript application composed of:
   "energy_kwh": 38.5,
   "price_pence": 1155,
   "charger_type": "home",
-  "charger_name": null
+  "charger_name": null,
+  "energy_source": "measured"
 }
 ```
 
@@ -203,11 +220,19 @@ Leccy is a full-stack TypeScript application composed of:
   "cost_per_session": [...],
   "temp_vs_range": [...],
   "miles_per_pct": [...],
-  "enriched_sessions": [...]
+  "enriched_sessions": [...],
+  "derived_insights": {
+    "ownership_cost": {...},
+    "home_away": {...},
+    "odometer_efficiency": [...],
+    "temperature_efficiency": [...],
+    "battery_capacity": [...],
+    "data_quality": {...}
+  }
 }
 ```
 
-`enriched_sessions` is an array of per-session derived data used by the advanced analytics charts (see [Advanced Analytics](#advanced-analytics-v111)):
+`enriched_sessions` is an array of per-session derived data used by the analytics charts:
 
 | Field | Type | Description |
 |---|---|---|
@@ -217,10 +242,12 @@ Leccy is a full-stack TypeScript application composed of:
 | `max_range_100_pct` | number | Projected range at 100% SOC (miles) |
 | `end_charge_temperature` | number | Air temperature at time of charging (°C) |
 | `energy_kwh` | number | Energy added (kWh, 0 if no charger cost logged) |
+| `energy_source` | string | `measured`, `estimated`, or null |
 | `initial_battery_percent` | number | State of charge when plugged in (%) |
 | `pct_charged` | number | Percentage points added during this session |
 | `distance_driven` | number \| null | Actual miles driven since previous session |
 | `estimated_range_consumed` | number \| null | GOM estimated range consumed since previous session |
+| `charger_type` | string \| null | `home`, `public`, or null |
 
 ### Admin — `/api/admin` (admin only)
 
@@ -236,32 +263,35 @@ Leccy is a full-stack TypeScript application composed of:
 
 ---
 
-## Advanced Analytics (v1.1.1)
+## Advanced Analytics (v1.4.0)
 
-Five additional insight charts are derived from `enriched_sessions` data returned by `GET /api/analytics`. All computation is done in the React layer from the data already fetched.
+Advanced analytics are derived server-side from `GET /api/analytics` and rendered by the React analytics page. The design deliberately separates measured values from derived estimates, because SOC, dashboard range, and user-entered costs do not all have the same evidential strength.
 
-### Chart 1 — Battery Health Proxy
+### Ownership Intelligence
 
-| Property | Value |
-|---|---|
-| Chart type | Line / Scatter with linear trendline |
-| X-axis | `odometer` (miles) |
-| Y-axis | `max_range_100_pct` — projected full-charge range, calculated as `final_range_miles / final_battery_pct × 100` |
-| Y-axis scale | Dynamic min/max (does not start at 0) so degradation is visible |
-| Trendline | Least-squares linear regression drawn as a dashed overlay |
-| Tooltip | Odometer, date, max range at 100% |
+Compares EV cost-per-mile with a typical petrol-car benchmark over the same odometer miles. The same savings figure is used on the dashboard and public aggregate homepage so public-facing numbers are based on real app data rather than placeholder copy.
 
-### Chart 2 — Thermal Impact on Charging
+### Home vs Away Economics
 
-| Property | Value |
-|---|---|
-| Chart type | Scatter |
-| X-axis | `end_charge_temperature` (°C) |
-| Y-axis | `energy_kwh` (kWh added per session) |
-| Point opacity | Scales with `initial_battery_percent` (low SOC = more transparent) |
-| Tooltip | Temperature, energy added, starting battery % |
+Splits session cost, kWh, average cost per costed charge, and cost-per-mile by `charger_type`. The session charts expose an `All | Home | Away` filter, and the analytics response includes grouped totals for the currently selected date and vehicle filters so users can see how much public charging changes ownership economics.
 
-### Chart 3 — GOM Accuracy: Estimated vs Real Range
+### Odometer-Based Efficiency
+
+Uses odometer differences between consecutive charging sessions as measured distance travelled. Efficiency points are calculated from kWh divided by odometer miles, with Battery Efficiency over Time excluding values more than two standard deviations from the mean.
+
+### Temperature-Normalised Efficiency
+
+Groups efficiency by ambient temperature band using `air_temp_celsius`. This is suitable for trend discovery, but the manual should continue to describe it as ambient-temperature analysis rather than battery-temperature measurement.
+
+### Measured-kWh Usable Capacity Proxy
+
+Compares charger-recorded `energy_kwh` with SOC gained: `energy_kwh / ((final_battery_pct - initial_battery_pct) / 100)`. Rows with `energy_source = 'estimated'` are excluded or labelled separately so SOC-derived kWh does not masquerade as charger-measured evidence.
+
+### Data Quality
+
+Summarises how much of the dataset has odometer continuity, measured kWh, vehicle links, temperature readings, and charge-type labels. This gives researchers and users a quick sense of how reliable downstream analyses are.
+
+### GOM Accuracy: Estimated vs Real Range
 
 | Property | Value |
 |---|---|
@@ -272,7 +302,7 @@ Five additional insight charts are derived from `enriched_sessions` data returne
 | Summary badge | Avg GOM ratio = Σ `distance_driven` / Σ `estimated_range_consumed` shown above chart |
 | Tooltip | Date, GOM estimate, actual miles |
 
-### Chart 4 — Range Anxiety Gauge
+### Range Anxiety Gauge
 
 | Property | Value |
 |---|---|
@@ -282,7 +312,7 @@ Five additional insight charts are derived from `enriched_sessions` data returne
 | Bar colour | Orange/red for bins below 20%, teal/green for 20% and above |
 | Median marker | Dashed vertical line annotated with the median `initial_battery_percent` |
 
-### Chart 5 — Charging Habits by Day
+### Charging Habits by Day
 
 | Property | Value |
 |---|---|
@@ -384,7 +414,7 @@ server {
 
 - **State Management:** Context API (`AuthContext`) — no Redux needed at this scale
 - **Forms:** React Hook Form with validation
-- **Charts:** Recharts (LineChart, BarChart, ScatterChart)
+- **Charts:** Custom SVG components in the React layer
 - **Routing:** React Router v6 (protected routes via `ProtectedRoute` wrapper)
 - **Quick entry:** `/quick-data-entry` is the authenticated default route. It stores an in-browser draft for charge-start odometer, SOC, and range, collapses saved start details into a summary, estimates kWh from SOC gained × vehicle battery size, and submits through the existing sessions and charger cost APIs.
 - **Styling:** Tailwind CSS with a green EV theme
@@ -395,7 +425,7 @@ server {
 
 ## Progressive Web App (PWA)
 
-Leccy v1.3.1 ships as a fully installable PWA. The following files drive this:
+Leccy v1.4.0 ships as a fully installable PWA. The following files drive this:
 
 | File | Purpose |
 |---|---|
@@ -410,7 +440,7 @@ Leccy v1.3.1 ships as a fully installable PWA. The following files drive this:
 - **Navigation requests** (`mode === 'navigate'`): serve the cached SPA shell (`/`) so the app loads offline after the first visit.
 - **`/api/*` requests**: network-first; returns a JSON `503` error response when offline.
 - **All other static assets**: cache-first, populating the cache on the first fetch.
-- Cache is versioned (`leccy-1.3.1`); old caches are purged on activation.
+- Cache is versioned (`leccy-1.4.0`); old caches are purged on activation.
 - The client calls `registration.update()` on load, sends `SKIP_WAITING` to an installed update, and reloads when `controllerchange` fires so installed PWAs move to the newest app version promptly.
 - The production server serves `sw.js` with `Cache-Control: no-store` and `index.html` with `Cache-Control: no-cache` so update checks are not blocked by stale shell files.
 
@@ -429,6 +459,16 @@ Example: £1.23 is stored as `123` pence.
 ---
 
 ## Changelog
+
+### v1.4.0
+
+- Reworked Data Entry around CSV paste/import with pre-submit testing, row-level validation, and no automatic charge type, kWh, or cost assumptions.
+- Added measured versus estimated kWh tracking through `charger_costs.energy_source`.
+- Added an Estimate kWh flow based on SOC gained × vehicle battery size, with a warning that estimated values affect charge-efficiency calculations.
+- Split charging-session analytics into separate cost and kWh charts with `All`, `Home`, and `Away` filters.
+- Added advanced analytics for ownership savings, home-versus-away economics, odometer-based efficiency, temperature-normalised efficiency, measured-kWh usable capacity proxy, and data quality.
+- Updated the public homepage to use live aggregate usage and EV-savings data across users, including admin sessions.
+- Refreshed SEO metadata and user-facing documentation to match the current app behaviour.
 
 ### v1.3.1
 

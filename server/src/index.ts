@@ -75,7 +75,7 @@ app.use(
       includeSubDomains: true,
     },
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-    crossOriginEmbedderPolicy: false, // avoid breaking Recharts SVGs
+    crossOriginEmbedderPolicy: false, // avoid breaking chart SVGs
   })
 );
 

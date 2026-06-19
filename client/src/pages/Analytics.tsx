@@ -7,6 +7,25 @@ import {
 import { analyticsApi, vehiclesApi, AnalyticsResult, Vehicle } from '../utils/api';
 
 type Period = 'week' | 'month' | 'all' | 'custom';
+type ChargeTypeFilter = 'all' | 'home' | 'public';
+
+function excludeStdDevOutliers<T>(
+  data: T[],
+  getValue: (item: T) => number,
+  maxStdDev = 2,
+): T[] {
+  if (data.length < 3) return data;
+
+  const values = data.map(getValue).filter((value) => Number.isFinite(value));
+  if (values.length < 3) return data;
+
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
+  const stdDev = Math.sqrt(variance);
+  if (stdDev === 0) return data;
+
+  return data.filter((item) => Math.abs(getValue(item) - mean) <= maxStdDev * stdDev);
+}
 
 function getDateRange(period: Period): { startDate?: string; endDate?: string } {
   const now = new Date();
@@ -24,6 +43,20 @@ function getDateRange(period: Period): { startDate?: string; endDate?: string } 
   return {};
 }
 
+function pounds(pence: number): string {
+  return `£${(pence / 100).toFixed(2)}`;
+}
+
+function periodLabel(period: Period, customStart: string, customEnd: string): string {
+  if (period === 'week') return 'the selected week';
+  if (period === 'month') return 'the selected month';
+  if (period === 'all') return 'all time';
+  if (customStart && customEnd) return `${customStart} to ${customEnd}`;
+  if (customStart) return `from ${customStart}`;
+  if (customEnd) return `up to ${customEnd}`;
+  return 'the selected custom period';
+}
+
 export default function Analytics() {
   const [period, setPeriod] = useState<Period>('all');
   const [customStart, setCustomStart] = useState('');
@@ -32,6 +65,7 @@ export default function Analytics() {
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [data, setData] = useState<AnalyticsResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [chargeTypeFilter, setChargeTypeFilter] = useState<ChargeTypeFilter>('all');
 
   useEffect(() => {
     async function loadVehicles() {
@@ -73,6 +107,23 @@ export default function Analytics() {
     { key: 'all', label: 'All Time' },
     { key: 'custom', label: 'Custom Range' },
   ];
+
+  const filteredEfficiencyData = data
+    ? excludeStdDevOutliers(data.efficiency_data, (point) => point.battery_efficiency)
+    : [];
+  const chargeTypeButtons: { key: ChargeTypeFilter; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'home', label: 'Home' },
+    { key: 'public', label: 'Away' },
+  ];
+  const filteredCostPerSession = data
+    ? data.cost_per_session.filter((point) =>
+        chargeTypeFilter === 'all' ? true : point.charger_type === chargeTypeFilter,
+      )
+    : [];
+  const costChartData = filteredCostPerSession.filter((point) => point.cost_pence > 0);
+  const kwhChartData = filteredCostPerSession.filter((point) => point.energy_kwh > 0);
+  const insights = data?.derived_insights;
 
   return (
     <div>
@@ -157,11 +208,110 @@ export default function Analytics() {
             <StatCard label="Miles Driven" value={`${data.miles_driven.toFixed(1)} mi`} />
           </div>
 
+          {insights && (
+            <>
+              <section className="mb-8">
+                <h2 className="text-lg font-bold text-green-900 mb-3">Ownership Intelligence</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <InsightCard label="Charging Style" value={insights.charging_behavior.profile} />
+                  <InsightCard label="Battery Stress" value={`${insights.battery_stress.level} (${insights.battery_stress.score}/100)`} />
+                  <InsightCard label="GOM Trust" value={`${insights.gom_trust.label}${insights.gom_trust.sample_count > 0 ? ` (${insights.gom_trust.ratio_pct}%)` : ''}`} />
+                  <InsightCard label="Running Cost" value={`${insights.ownership_cost.running_cost_per_mile_pence.toFixed(1)}p/mi`} />
+                  <InsightCard label="Median Plug-in SOC" value={`${insights.charging_behavior.median_plugin_soc.toFixed(1)}%`} />
+                  <InsightCard label="Median SOC Gain" value={`${insights.charging_behavior.median_soc_gain.toFixed(1)}%`} />
+                  <InsightCard label="Measured kWh" value={`${insights.data_quality.measured_kwh_pct}%`} />
+                  <InsightCard label="Total Ownership Cost" value={pounds(insights.ownership_cost.total_running_cost_pence)} />
+                </div>
+              </section>
+
+              <section className="mb-8">
+                <h2 className="text-lg font-bold text-green-900 mb-3">Home vs Away Economics</h2>
+                <p className="text-sm text-gray-500 mb-3">
+                  Costs and averages below are calculated for {periodLabel(period, customStart, customEnd)} using sessions in the current vehicle filter.
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                  <InsightCard label="Home Sessions" value={`${insights.home_away.home_sessions}`} />
+                  <InsightCard label="Away Sessions" value={`${insights.home_away.away_sessions}`} />
+                  <InsightCard label="Home Total Cost" value={pounds(insights.home_away.home_cost_pence)} />
+                  <InsightCard label="Away Total Cost" value={pounds(insights.home_away.away_cost_pence)} />
+                  <InsightCard label="Home Avg/Charge" value={pounds(insights.home_away.home_avg_cost_per_charge_pence)} />
+                  <InsightCard label="Away Avg/Charge" value={pounds(insights.home_away.away_avg_cost_per_charge_pence)} />
+                  <InsightCard label="Home Avg/kWh" value={`${insights.home_away.home_avg_pence_per_kwh.toFixed(1)}p/kWh`} />
+                  <InsightCard label="Away Avg/kWh" value={`${insights.home_away.away_avg_pence_per_kwh.toFixed(1)}p/kWh`} />
+                </div>
+                {(insights.home_away.home_costed_sessions < insights.home_away.home_sessions ||
+                  insights.home_away.away_costed_sessions < insights.home_away.away_sessions) && (
+                  <p className="text-xs text-gray-400 mb-2">
+                    Average cost per charge uses costed sessions only: {insights.home_away.home_costed_sessions} home and {insights.home_away.away_costed_sessions} away.
+                  </p>
+                )}
+                {insights.home_away.away_cost_premium_pence > 0 && (
+                  <p className="text-sm text-gray-500">
+                    Away charging is averaging {insights.home_away.away_cost_premium_pence.toFixed(1)}p/kWh more than home charging in this period.
+                  </p>
+                )}
+              </section>
+
+              {insights.odometer_efficiency.length > 0 && (
+                <ChartCard title="Odometer-Based Efficiency (kWh/mile)">
+                  <MiniLineChart
+                    data={insights.odometer_efficiency as unknown as Record<string, unknown>[]}
+                    xKey="date"
+                    series={[{ key: 'kwh_per_mile', color: '#0d9488', label: 'kWh/mile' }]}
+                    height={250}
+                    yFmt={(v) => v.toFixed(2)}
+                  />
+                </ChartCard>
+              )}
+
+              {insights.temperature_efficiency.length > 0 && (
+                <ChartCard title="Temperature-Normalised Efficiency">
+                  <MiniBarChart
+                    data={insights.temperature_efficiency as unknown as Record<string, unknown>[]}
+                    xKey="band"
+                    bars={[{ key: 'avg_kwh_per_mile', color: '#14b8a6', label: 'Avg kWh/mile' }]}
+                    height={250}
+                    yFmt={(v) => v.toFixed(2)}
+                  />
+                </ChartCard>
+              )}
+
+              {insights.battery_capacity.length > 0 && (
+                <ChartCard title="Measured-kWh Usable Capacity Proxy">
+                  <MiniLineChart
+                    data={insights.battery_capacity as unknown as Record<string, unknown>[]}
+                    xKey="date"
+                    series={[
+                      { key: 'estimated_usable_capacity_kwh', color: '#7c3aed', label: 'Usable kWh' },
+                      { key: 'nominal_battery_kwh', color: '#c4b5fd', label: 'Nominal kWh' },
+                    ]}
+                    height={250}
+                    yFmt={(v) => `${v.toFixed(1)} kWh`}
+                  />
+                  <p className="text-xs text-gray-400 mt-3">
+                    Uses only sessions with measured charger kWh and SOC gain of at least 20%. AC charging losses can make this higher than true battery-stored energy, so trends matter more than single points.
+                  </p>
+                </ChartCard>
+              )}
+
+              <section className="mb-8">
+                <h2 className="text-lg font-bold text-green-900 mb-3">Data Quality</h2>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <InsightCard label="Sessions" value={`${insights.data_quality.total_sessions}`} />
+                  <InsightCard label="Measured kWh" value={`${insights.data_quality.measured_kwh_sessions}`} />
+                  <InsightCard label="Estimated kWh" value={`${insights.data_quality.estimated_kwh_sessions}`} />
+                  <InsightCard label="No kWh" value={`${insights.data_quality.no_kwh_sessions}`} />
+                  <InsightCard label="Costed" value={`${insights.data_quality.costed_sessions}`} />
+                </div>
+              </section>
+            </>
+          )}
+
           {/* Chart 1: Battery efficiency */}
-          {data.efficiency_data.length > 0 && (
+          {filteredEfficiencyData.length > 0 && (
             <ChartCard title="Battery Efficiency Over Time (kWh/mile)">
               <MiniLineChart
-                data={data.efficiency_data as unknown as Record<string, unknown>[]}
+                data={filteredEfficiencyData as unknown as Record<string, unknown>[]}
                 xKey="date"
                 series={[{ key: 'battery_efficiency', color: '#16a34a', label: 'kWh/mile' }]}
                 height={250}
@@ -169,20 +319,57 @@ export default function Analytics() {
             </ChartCard>
           )}
 
-          {/* Chart 2: Cost per session */}
+          {/* Charging session cost / energy charts */}
           {data.cost_per_session.length > 0 && (
-            <ChartCard title="Cost per Charging Session">
-              <MiniBarChart
-                data={data.cost_per_session as unknown as Record<string, unknown>[]}
-                xKey="date"
-                bars={[
-                  { key: 'cost_pence', color: '#22c55e', label: 'Cost (pence)' },
-                  { key: 'energy_kwh', color: '#86efac', label: 'kWh' },
-                ]}
-                height={250}
-                yFmt={(v) => v >= 100 ? `£${(v / 100).toFixed(2)}` : `${v.toFixed(0)}p`}
-              />
-            </ChartCard>
+            <section className="mb-6">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <h2 className="text-lg font-bold text-green-900">Charging Sessions</h2>
+                <div className="flex rounded-lg overflow-hidden border border-green-300">
+                  {chargeTypeButtons.map((button) => (
+                    <button
+                      key={button.key}
+                      type="button"
+                      onClick={() => setChargeTypeFilter(button.key)}
+                      className={`px-4 py-1.5 text-sm font-semibold transition-colors ${
+                        chargeTypeFilter === button.key
+                          ? 'bg-green-700 text-white'
+                          : 'bg-white text-green-700 hover:bg-green-50'
+                      }`}
+                    >
+                      {button.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {costChartData.length > 0 ? (
+                <ChartCard title="Cost per Charging Session">
+                  <MiniBarChart
+                    data={costChartData as unknown as Record<string, unknown>[]}
+                    xKey="date"
+                    bars={[{ key: 'cost_pence', color: '#22c55e', label: 'Cost' }]}
+                    height={250}
+                    yFmt={(v) => v >= 100 ? `£${(v / 100).toFixed(2)}` : `${v.toFixed(0)}p`}
+                  />
+                </ChartCard>
+              ) : (
+                <EmptyChartMessage message="No cost data for this charging type." />
+              )}
+
+              {kwhChartData.length > 0 ? (
+                <ChartCard title="kWh per Charging Session">
+                  <MiniBarChart
+                    data={kwhChartData as unknown as Record<string, unknown>[]}
+                    xKey="date"
+                    bars={[{ key: 'energy_kwh', color: '#86efac', label: 'kWh' }]}
+                    height={250}
+                    yFmt={(v) => `${v.toFixed(1)} kWh`}
+                  />
+                </ChartCard>
+              ) : (
+                <EmptyChartMessage message="No kWh data for this charging type." />
+              )}
+            </section>
           )}
 
           {/* Chart 3: Temperature vs range efficiency */}
@@ -305,11 +492,28 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+function InsightCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-green-100 shadow-sm p-4">
+      <div className="text-xs text-gray-500 mb-1">{label}</div>
+      <div className="text-base font-bold text-green-900 leading-snug">{value}</div>
+    </div>
+  );
+}
+
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-green-100 p-5 mb-6">
       <h3 className="text-sm font-bold text-green-800 mb-4">{title}</h3>
       {children}
+    </div>
+  );
+}
+
+function EmptyChartMessage({ message }: { message: string }) {
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-green-100 p-5 mb-6 text-sm text-gray-400 text-center">
+      {message}
     </div>
   );
 }

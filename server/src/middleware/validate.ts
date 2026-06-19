@@ -170,6 +170,7 @@ export const chargerCostSchema = z.object({
     .max(200, 'Energy exceeds expected maximum'),
   price_pence: pence(10_000),
   charger_type: z.enum(['home', 'public']),
+  energy_source: z.enum(['measured', 'estimated']).optional().default('measured'),
   charger_name: z
     .string()
     .max(100)
@@ -187,6 +188,7 @@ export const chargerCostUpdateSchema = z.object({
     .optional(),
   price_pence: pence(10_000).optional(),
   charger_type: z.enum(['home', 'public']).optional(),
+  energy_source: z.enum(['measured', 'estimated']).optional(),
 });
 
 /** POST /maintenance */

@@ -88,6 +88,7 @@ function initializeDatabase(): void {
       session_id INTEGER NOT NULL,
       user_id INTEGER NOT NULL,
       energy_kwh REAL NOT NULL,
+      energy_source TEXT NOT NULL DEFAULT 'measured' CHECK(energy_source IN ('measured', 'estimated')),
       price_pence INTEGER NOT NULL,
       charger_type TEXT NOT NULL CHECK(charger_type IN ('home', 'public')),
       charger_name TEXT,
@@ -318,6 +319,12 @@ function runMigrations(): void {
   if (!sessionCols.includes('date_started')) {
     db.exec(`ALTER TABLE charging_sessions ADD COLUMN date_started TEXT`);
     console.log('[DB] Migration: added charging_sessions.date_started');
+  }
+
+  const chargerCostCols = (db.pragma('table_info(charger_costs)') as Array<{ name: string }>).map((c) => c.name);
+  if (!chargerCostCols.includes('energy_source')) {
+    db.exec(`ALTER TABLE charger_costs ADD COLUMN energy_source TEXT NOT NULL DEFAULT 'measured'`);
+    console.log('[DB] Migration: added charger_costs.energy_source');
   }
 
   // vehicle_id on maintenance_log

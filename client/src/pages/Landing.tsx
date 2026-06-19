@@ -148,12 +148,12 @@ function MockAnalytics() {
       </div>
 
       <div className="bg-white rounded-xl border border-green-100 shadow-sm p-3 mb-2">
-        <p className="text-[9px] font-bold text-green-800 mb-2">Cost per Charging Session (£)</p>
+        <p className="text-[9px] font-bold text-green-800 mb-2">Home vs Away Charging Economics</p>
         <MiniBarSvg />
       </div>
 
       <div className="bg-white rounded-xl border border-green-100 shadow-sm p-3">
-        <p className="text-[9px] font-bold text-green-800 mb-1">Battery Efficiency (kWh/mile)</p>
+        <p className="text-[9px] font-bold text-green-800 mb-1">Odometer-Based Efficiency (kWh/mile)</p>
         <MiniLineSvg />
       </div>
     </div>
@@ -250,43 +250,33 @@ function MockTariff() {
 function MockDataEntry() {
   return (
     <div className="p-4 bg-gray-50">
-      <h2 className="text-sm font-bold text-green-900 mb-1">Add Charging Session</h2>
-      <p className="text-green-600 text-xs mb-3">Log a new charge and Leccy calculates the cost.</p>
+      <h2 className="text-sm font-bold text-green-900 mb-1">Paste Charging Sessions CSV</h2>
+      <p className="text-green-600 text-xs mb-3">Validate batches before importing them.</p>
 
       <div className="bg-white rounded-xl border border-green-100 shadow-sm p-4">
-        <div className="grid grid-cols-2 gap-2 mb-2">
-          <div>
-            <label className="block text-[9px] font-semibold text-gray-600 mb-0.5">Date</label>
-            <div className="border border-gray-200 rounded px-2 py-1 text-[10px] text-gray-400">2026-04-15</div>
+        <div className="border border-gray-200 rounded-lg bg-gray-50 px-3 py-2 text-[10px] text-gray-700 font-mono leading-relaxed mb-2">
+          12540,22,53,88,214,12,15/04/2026<br />
+          12721,18,44,91,226,10,20/04/2026<br />
+          12908,31,76,84,207,14,27/04/2026
+        </div>
+        <div className="grid grid-cols-3 gap-2 mb-2 text-[10px]">
+          <div className="bg-green-50 border border-green-100 rounded px-2 py-1">
+            <strong className="block text-green-800">3</strong>
+            rows valid
           </div>
-          <div>
-            <label className="block text-[9px] font-semibold text-gray-600 mb-0.5">Vehicle</label>
-            <div className="border border-gray-200 rounded px-2 py-1 text-[10px] text-gray-400">Lightning (EV22 SAR)</div>
+          <div className="bg-green-50 border border-green-100 rounded px-2 py-1">
+            <strong className="block text-green-800">368 mi</strong>
+            odometer span
           </div>
-          <div>
-            <label className="block text-[9px] font-semibold text-gray-600 mb-0.5">Battery before (%)</label>
-            <div className="border border-gray-200 rounded px-2 py-1 text-[10px] text-gray-700 font-mono">22</div>
-          </div>
-          <div>
-            <label className="block text-[9px] font-semibold text-gray-600 mb-0.5">Battery after (%)</label>
-            <div className="border border-gray-200 rounded px-2 py-1 text-[10px] text-gray-700 font-mono">100</div>
-          </div>
-          <div>
-            <label className="block text-[9px] font-semibold text-gray-600 mb-0.5">Miles since last charge</label>
-            <div className="border border-gray-200 rounded px-2 py-1 text-[10px] text-gray-700 font-mono">214</div>
-          </div>
-          <div>
-            <label className="block text-[9px] font-semibold text-gray-600 mb-0.5">Temp (°C)</label>
-            <div className="border border-gray-200 rounded px-2 py-1 text-[10px] text-gray-700 font-mono">12</div>
+          <div className="bg-green-50 border border-green-100 rounded px-2 py-1">
+            <strong className="block text-green-800">0</strong>
+            errors
           </div>
         </div>
-
-        {/* cost estimate callout */}
-        <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-2 text-[10px] text-green-800 font-semibold">
-          Estimated cost: <span className="text-green-700 font-bold text-xs">£4.81</span> (63.7 kWh · Octopus Go off-peak)
+        <div className="flex gap-2">
+          <button className="bg-white border border-green-300 text-green-800 text-[10px] font-bold px-4 py-1.5 rounded-lg">Test</button>
+          <button className="bg-green-700 text-white text-[10px] font-bold px-4 py-1.5 rounded-lg">Submit</button>
         </div>
-
-        <button className="bg-green-700 text-white text-[10px] font-bold px-4 py-1.5 rounded-lg">Save Session</button>
       </div>
     </div>
   );
@@ -516,7 +506,7 @@ export default function Landing() {
             <FeatureCard
               icon="📊"
               title="Smart Cost Analytics"
-              desc="Visualise your spending month by month. See cost per mile, kWh consumed, and how temperature appears to affect your range — all from your own data."
+              desc="Visualise cost per mile, kWh use, EV savings, home versus away charging, and odometer-based efficiency from your own charging records."
             />
             <FeatureCard
               icon="🌙"
@@ -531,7 +521,7 @@ export default function Landing() {
             <FeatureCard
               icon="🔋"
               title="Battery Health Tracking"
-              desc="Monitor your battery's projected full-charge range against odometer readings. A built-in trendline reveals real-world degradation over time — before it becomes a problem."
+              desc="Compare charger-recorded kWh against state-of-charge changes to build a measured-kWh usable capacity proxy, with estimates clearly separated from measured data."
             />
             <FeatureCard
               icon="🧭"
@@ -577,9 +567,9 @@ export default function Landing() {
                 <span className="inline-block bg-green-700 text-white text-xs font-bold px-3 py-1 rounded-full mb-2">Analytics</span>
                 <h3 className="text-xl font-bold text-green-900">Powerful charging insights</h3>
                 <p className="text-gray-600 text-sm mt-1">
-                  Interactive charts covering cost per session, battery efficiency, GOM accuracy,
-                  thermal impact, range anxiety patterns, and weekly charging habits — with a battery
-                  health trendline that shows degradation over time.
+                  Interactive charts covering EV savings, home versus away costs, measured and estimated kWh,
+                  odometer-based efficiency, temperature-normalised performance, GOM accuracy, charging habits,
+                  and data quality.
                 </p>
               </div>
               <BrowserFrame title="analytics">
@@ -593,10 +583,10 @@ export default function Landing() {
             <div>
               <div className="mb-4">
                 <span className="inline-block bg-green-700 text-white text-xs font-bold px-3 py-1 rounded-full mb-2">Data Entry</span>
-                <h3 className="text-xl font-bold text-green-900">Log a charge in seconds</h3>
+                <h3 className="text-xl font-bold text-green-900">Paste, test, then import</h3>
                 <p className="text-gray-600 text-sm mt-1">
-                  Enter your battery percentage before and after, miles driven, and optionally temperature. Leccy does
-                  the maths — estimating kWh, cost, and efficiency automatically when exact charger data is not available.
+                  Paste charging-session CSV rows, test them for row-level errors and basic statistics, then import
+                  sessions without assuming charge type, kWh, or cost. Add measured charger data manually afterwards.
                 </p>
               </div>
               <BrowserFrame title="data-entry">

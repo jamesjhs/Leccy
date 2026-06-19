@@ -4,13 +4,15 @@ import { useLocation } from 'react-router-dom';
 const SITE_NAME = 'Leccy';
 const DEFAULT_TITLE = 'Leccy - EV Charging Cost Tracker';
 const DEFAULT_DESCRIPTION =
-  'Leccy helps EV drivers track charging sessions, home and public charging costs, smart tariffs, vehicle efficiency, maintenance, and cost per mile.';
+  'Leccy helps EV drivers track charging sessions, home and away charging costs, smart tariffs, measured and estimated kWh, EV savings, maintenance, and cost per mile.';
 const DEFAULT_KEYWORDS = [
   'EV cost tracker',
   'electric vehicle charging costs',
   'EV charging log',
   'cost per mile calculator',
   'smart tariff tracker',
+  'EV savings calculator',
+  'EV battery efficiency analytics',
   'electric car maintenance log',
 ];
 const DEFAULT_IMAGE_PATH = '/icons/icon-512x512.png';
@@ -54,12 +56,12 @@ const routeSeo: Record<string, SeoConfig> = {
   },
   '/data-entry': {
     title: 'Charging Session Log - Leccy',
-    description: 'Add, edit, estimate, and save EV charging sessions with odometer, battery, range, temperature, kWh, and cost fields.',
+    description: 'Paste and validate EV charging session CSV data, then add measured charger kWh, cost, and home or away charge type details.',
     robots: privateRobots,
   },
   '/analytics': {
     title: 'EV Charging Analytics - Leccy',
-    description: 'Analyse EV cost per mile, kWh use, range efficiency, temperature impact, battery health proxy, GOM accuracy, and charging habits.',
+    description: 'Analyse EV savings, home versus away charging economics, odometer-based efficiency, temperature-normalised performance, measured-kWh capacity proxy, GOM accuracy, and data quality.',
     robots: privateRobots,
   },
   '/tariff': {

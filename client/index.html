@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Leccy – EV Cost Tracker</title>
+    <title>Leccy - EV Charging Cost Tracker</title>
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!-- PWA / installable web app -->
@@ -14,19 +14,38 @@
     <meta name="apple-mobile-web-app-title" content="Leccy" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <!-- Description for search / share -->
-    <meta name="description" content="Log and analyse the cost of charging your electric vehicle." />
+    <meta
+      name="description"
+      content="Leccy helps EV drivers track charging sessions, home and public charging costs, smart tariffs, vehicle efficiency, maintenance, and cost per mile."
+    />
+    <meta
+      name="keywords"
+      content="EV cost tracker, electric vehicle charging costs, EV charging log, cost per mile calculator, smart tariff tracker, electric car maintenance log"
+    />
+    <meta name="robots" content="index,follow" />
+    <meta name="application-name" content="Leccy" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="canonical" href="https://leccy.app/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Leccy" />
+    <meta property="og:title" content="Leccy - EV Charging Cost Tracker" />
+    <meta
+      property="og:description"
+      content="Track EV charging costs, smart tariffs, vehicle efficiency, maintenance, and cost per mile in one free dashboard."
+    />
+    <meta property="og:url" content="https://leccy.app/" />
+    <meta property="og:image" content="https://leccy.app/icons/icon-512x512.png" />
+    <meta property="og:locale" content="en_GB" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Leccy - EV Charging Cost Tracker" />
+    <meta
+      name="twitter:description"
+      content="Track EV charging costs, smart tariffs, vehicle efficiency, maintenance, and cost per mile in one free dashboard."
+    />
+    <meta name="twitter:image" content="https://leccy.app/icons/icon-512x512.png" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(err => {
-            console.warn('SW registration failed:', err);
-          });
-        });
-      }
-    </script>
   </body>
 </html>

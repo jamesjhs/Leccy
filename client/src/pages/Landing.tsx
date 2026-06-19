@@ -414,8 +414,8 @@ export default function Landing() {
                 Know exactly what every mile <span className="text-green-300">costs you.</span>
               </h1>
               <p className="text-green-200 text-lg leading-relaxed mb-8 max-w-xl">
-                Leccy turns your EV charging data into real insights — tracking cost per mile, battery efficiency,
-                and tariff savings, all in one beautiful dashboard. Completely free.
+                Leccy turns your EV charging data into practical running-cost insights — tracking cost per mile,
+                efficiency trends, and smart-tariff estimates in one focused dashboard. Completely free.
               </p>
               <div className="flex flex-wrap gap-4 mb-10">
                 <Link
@@ -455,7 +455,7 @@ export default function Landing() {
         <div className="max-w-4xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-8 text-center">
           {[
             { val: '18,340', unit: 'miles tracked', icon: '🛣️' },
-            { val: '£2,341', unit: 'saved by users', icon: '💷' },
+            { val: '£2,341', unit: 'example EV spend', icon: '💷' },
             { val: '847', unit: 'sessions logged', icon: '🔋' },
             { val: '4.2p', unit: 'avg cost per mile', icon: '📉' },
           ].map((s) => (
@@ -481,12 +481,12 @@ export default function Landing() {
             <FeatureCard
               icon="📊"
               title="Smart Cost Analytics"
-              desc="Visualise your spending month by month. See cost per mile, kWh consumed, and how temperature affects your range — all from your own data."
+              desc="Visualise your spending month by month. See cost per mile, kWh consumed, and how temperature appears to affect your range — all from your own data."
             />
             <FeatureCard
               icon="🌙"
               title="Off-Peak Tariff Optimisation"
-              desc="Enter your peak and off-peak rates (like Octopus Go or Intelligent Octopus) and Leccy automatically applies the right rate to every charge."
+              desc="Enter your peak and off-peak rates (like Octopus Go or Intelligent Octopus) and Leccy estimates home charging costs from your tariff window."
             />
             <FeatureCard
               icon="🚗"
@@ -561,7 +561,7 @@ export default function Landing() {
                 <h3 className="text-xl font-bold text-green-900">Log a charge in seconds</h3>
                 <p className="text-gray-600 text-sm mt-1">
                   Enter your battery percentage before and after, miles driven, and optionally temperature. Leccy does
-                  the maths — calculating exact kWh used, cost, and efficiency automatically.
+                  the maths — estimating kWh, cost, and efficiency automatically when exact charger data is not available.
                 </p>
               </div>
               <BrowserFrame title="data-entry">
@@ -624,7 +624,7 @@ export default function Landing() {
             </div>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-green-900 mb-4">The future of Leccy</h2>
             <p className="text-gray-600 text-lg max-w-2xl mx-auto">
-              We're building the deepest EV cost tracking platform on the planet. Here's what's coming next.
+              We're building deeper EV cost tracking over time. Here's what's coming next.
             </p>
           </div>
 
@@ -675,7 +675,7 @@ export default function Landing() {
           <div className="text-6xl mb-5">⚡</div>
           <h2 className="text-3xl sm:text-4xl font-extrabold mb-4">Ready to understand your EV?</h2>
           <p className="text-green-200 text-lg mb-8 max-w-xl mx-auto">
-            Join hundreds of EV drivers tracking their real running costs with Leccy. Free, forever.
+            Start tracking your real EV running costs with Leccy. Free, forever.
             No subscription, no upsell.
           </p>
           <div className="flex flex-wrap justify-center gap-4">

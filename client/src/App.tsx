@@ -4,6 +4,7 @@ import { useAuth } from './hooks/useAuth';
 import Layout from './components/Layout';
 import CookieNotice from './components/CookieNotice';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
+import Seo from './components/Seo';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import AccountSettings from './pages/AccountSettings';
@@ -54,6 +55,7 @@ export default function App() {
   return (
     <AuthContext.Provider value={auth}>
       <BrowserRouter>
+        <Seo />
         <CookieNotice />
         <PwaInstallPrompt />
         <Routes>

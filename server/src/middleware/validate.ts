@@ -153,6 +153,7 @@ export const sessionSchema = z.object({
     .finite()
     .min(-60, 'Temperature below -60 °C is outside expected range')
     .max(60, 'Temperature above 60 °C is outside expected range'),
+  date_started: isoDate.optional().nullable(),
   date_unplugged: isoDate,
 });
 

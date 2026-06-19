@@ -76,6 +76,7 @@ function initializeDatabase(): void {
       final_battery_pct REAL NOT NULL,
       final_range_miles REAL NOT NULL,
       air_temp_celsius REAL NOT NULL,
+      date_started TEXT,
       date_unplugged TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -313,6 +314,10 @@ function runMigrations(): void {
   if (!sessionCols.includes('vehicle_id')) {
     db.exec(`ALTER TABLE charging_sessions ADD COLUMN vehicle_id INTEGER REFERENCES vehicles(id) ON DELETE SET NULL`);
     console.log('[DB] Migration: added charging_sessions.vehicle_id');
+  }
+  if (!sessionCols.includes('date_started')) {
+    db.exec(`ALTER TABLE charging_sessions ADD COLUMN date_started TEXT`);
+    console.log('[DB] Migration: added charging_sessions.date_started');
   }
 
   // vehicle_id on maintenance_log

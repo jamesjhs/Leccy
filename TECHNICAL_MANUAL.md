@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker v1.2.0: Technical Manual
+# Leccy — EV Cost Tracker v1.3.0: Technical Manual
 
 ## Architecture Overview
 
@@ -61,6 +61,7 @@ Leccy is a full-stack TypeScript application composed of:
 | `final_battery_pct` | REAL | 0–100 |
 | `final_range_miles` | REAL | |
 | `air_temp_celsius` | REAL | |
+| `date_started` | TEXT | Optional ISO date (YYYY-MM-DD) |
 | `date_unplugged` | TEXT | ISO date (YYYY-MM-DD) |
 | `created_at` | TEXT | ISO datetime |
 
@@ -387,6 +388,7 @@ server {
 - **Forms:** React Hook Form with validation
 - **Charts:** Recharts (LineChart, BarChart, ScatterChart)
 - **Routing:** React Router v6 (protected routes via `ProtectedRoute` wrapper)
+- **Quick entry:** `/quick-data-entry` stores an in-browser draft for charge-start odometer, battery, and range, then submits through the existing sessions and charger cost APIs.
 - **Styling:** Tailwind CSS with a green EV theme
 - **API Client:** Axios with request/response interceptors for auth
 - **PWA:** Web App Manifest + Service Worker — installable on Android (Chrome) and iOS (Safari)
@@ -409,7 +411,7 @@ Leccy v1.1.1 ships as a fully installable PWA. The following files drive this:
 - **Navigation requests** (`mode === 'navigate'`): serve the cached SPA shell (`/`) so the app loads offline after the first visit.
 - **`/api/*` requests**: network-first; returns a JSON `503` error response when offline.
 - **All other static assets**: cache-first, populating the cache on the first fetch.
-- Cache is versioned (`leccy-1.1.0`); old caches are purged on activation.
+- Cache is versioned (`leccy-1.3.0`); old caches are purged on activation.
 
 ### Content-Security-Policy
 

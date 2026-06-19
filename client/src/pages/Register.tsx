@@ -4,6 +4,8 @@ import { useForm } from 'react-hook-form';
 import { useAuthContext } from '../App';
 import PublicFooter from '../components/PublicFooter';
 
+const DEFAULT_AUTH_ROUTE = '/quick-data-entry';
+
 interface RegisterForm {
   display_name: string;
   email: string;
@@ -46,7 +48,7 @@ export default function Register() {
     setIsSubmitting(true);
     try {
       await registerUser(data.email, data.password, data.display_name || undefined);
-      navigate('/dashboard');
+      navigate(DEFAULT_AUTH_ROUTE);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||

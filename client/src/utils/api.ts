@@ -183,6 +183,7 @@ export interface ChargingSession {
   final_battery_pct: number;
   final_range_miles: number;
   air_temp_celsius: number;
+  date_started: string | null;
   date_unplugged: string;
   created_at: string;
 }
@@ -195,6 +196,7 @@ export interface NewSession {
   final_battery_pct: number;
   final_range_miles: number;
   air_temp_celsius: number;
+  date_started?: string | null;
   date_unplugged: string;
 }
 

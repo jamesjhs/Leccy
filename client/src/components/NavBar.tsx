@@ -5,6 +5,7 @@ import { useAuthContext } from '../App';
 const navLinks = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/vehicles', label: 'Vehicles' },
+  { to: '/quick-data-entry', label: 'Quick Entry' },
   { to: '/data-entry', label: 'Data Entry' },
   { to: '/maintenance', label: 'Maintenance' },
   { to: '/tariff', label: 'Tariff' },
@@ -31,7 +32,7 @@ export default function NavBar() {
       <div className="container mx-auto px-4 max-w-6xl">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/dashboard" className="flex items-center gap-2 font-bold text-xl tracking-tight">
+          <Link to="/quick-data-entry" className="flex items-center gap-2 font-bold text-xl tracking-tight">
             <span>⚡</span>
             <span>Leccy</span>
           </Link>

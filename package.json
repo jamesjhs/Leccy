@@ -1,0 +1,9 @@
+{
+  "name": "leccy",
+  "version": "1.3.0",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix client run build && npm --prefix server run build",
+    "start": "node scripts/start.js"
+  }
+}

@@ -46,6 +46,7 @@ router.post('/', validate(sessionSchema), (req: Request, res: Response): void =>
       final_battery_pct,
       final_range_miles,
       air_temp_celsius,
+      date_started,
       date_unplugged,
     } = req.body as ChargingSession;
 
@@ -63,8 +64,8 @@ router.post('/', validate(sessionSchema), (req: Request, res: Response): void =>
     const result = db
       .prepare(
         `INSERT INTO charging_sessions
-          (user_id, vehicle_id, odometer_miles, initial_battery_pct, initial_range_miles, final_battery_pct, final_range_miles, air_temp_celsius, date_unplugged)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          (user_id, vehicle_id, odometer_miles, initial_battery_pct, initial_range_miles, final_battery_pct, final_range_miles, air_temp_celsius, date_started, date_unplugged)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         authReq.user!.userId,
@@ -75,6 +76,7 @@ router.post('/', validate(sessionSchema), (req: Request, res: Response): void =>
         final_battery_pct,
         final_range_miles,
         air_temp_celsius,
+        date_started ?? null,
         date_unplugged
       );
 
@@ -120,6 +122,7 @@ router.put('/:id', validate(sessionUpdateSchema), (req: Request, res: Response):
       final_battery_pct,
       final_range_miles,
       air_temp_celsius,
+      date_started,
       date_unplugged,
     } = req.body as Partial<ChargingSession>;
 
@@ -131,6 +134,7 @@ router.put('/:id', validate(sessionUpdateSchema), (req: Request, res: Response):
          final_battery_pct   = COALESCE(?, final_battery_pct),
          final_range_miles   = COALESCE(?, final_range_miles),
          air_temp_celsius    = COALESCE(?, air_temp_celsius),
+         date_started        = COALESCE(?, date_started),
          date_unplugged      = COALESCE(?, date_unplugged)
        WHERE id = ?`
     ).run(
@@ -140,6 +144,7 @@ router.put('/:id', validate(sessionUpdateSchema), (req: Request, res: Response):
       final_battery_pct ?? null,
       final_range_miles ?? null,
       air_temp_celsius ?? null,
+      date_started ?? null,
       date_unplugged ?? null,
       sessionId,
     );

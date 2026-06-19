@@ -5,6 +5,8 @@ import { useAuthContext } from '../App';
 import { authApi } from '../utils/api';
 import PublicFooter from '../components/PublicFooter';
 
+const DEFAULT_AUTH_ROUTE = '/quick-data-entry';
+
 type Tab = 'password' | 'magic';
 
 interface PasswordForm {
@@ -47,7 +49,7 @@ export default function Login() {
     if (magic) {
       setIsSubmitting(true);
       verifyMagicLink(magic)
-        .then(() => navigate('/dashboard'))
+        .then(() => navigate(DEFAULT_AUTH_ROUTE))
         .catch(() => {
           setApiError('Magic link is invalid or has expired. Please request a new one.');
           setIsSubmitting(false);
@@ -90,7 +92,7 @@ export default function Login() {
         setTempToken(result.temp_token);
         setTwoFAPending(true);
       } else {
-        navigate('/dashboard');
+        navigate(DEFAULT_AUTH_ROUTE);
       }
     } catch (err: unknown) {
       const msg =
@@ -133,7 +135,7 @@ export default function Login() {
     try {
       const res = await authApi.verify2faLogin(tempToken, data.code);
       setAuth(res.data.token, res.data.user);
-      navigate('/dashboard');
+      navigate(DEFAULT_AUTH_ROUTE);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||

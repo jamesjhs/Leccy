@@ -3,11 +3,13 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/Layout';
 import CookieNotice from './components/CookieNotice';
+import PwaInstallPrompt from './components/PwaInstallPrompt';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import AccountSettings from './pages/AccountSettings';
 import Dashboard from './pages/Dashboard';
 import DataEntry from './pages/DataEntry';
+import QuickDataEntry from './pages/QuickDataEntry';
 import Maintenance from './pages/Maintenance';
 import Tariff from './pages/Tariff';
 import Analytics from './pages/Analytics';
@@ -15,6 +17,8 @@ import Vehicles from './pages/Vehicles';
 import Admin from './pages/Admin';
 import Landing from './pages/Landing';
 import { UserInfo } from './utils/api';
+
+const DEFAULT_AUTH_ROUTE = '/quick-data-entry';
 
 interface AuthContextType {
   user: UserInfo | null;
@@ -40,7 +44,7 @@ function ProtectedRoute({ children, adminOnly = false }: { children: React.React
   const { user, isLoading, isAdmin } = useAuthContext();
   if (isLoading) return <div className="flex items-center justify-center min-h-screen">Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (adminOnly && !isAdmin) return <Navigate to="/dashboard" replace />;
+  if (adminOnly && !isAdmin) return <Navigate to={DEFAULT_AUTH_ROUTE} replace />;
   return <>{children}</>;
 }
 
@@ -51,10 +55,11 @@ export default function App() {
     <AuthContext.Provider value={auth}>
       <BrowserRouter>
         <CookieNotice />
+        <PwaInstallPrompt />
         <Routes>
-          <Route path="/login" element={auth.user && !auth.isLoading ? <Navigate to="/dashboard" replace /> : <Login />} />
-          <Route path="/register" element={auth.user && !auth.isLoading ? <Navigate to="/dashboard" replace /> : <Register />} />
-          <Route path="/" element={auth.user && !auth.isLoading ? <Navigate to="/dashboard" replace /> : <Landing />} />
+          <Route path="/login" element={auth.user && !auth.isLoading ? <Navigate to={DEFAULT_AUTH_ROUTE} replace /> : <Login />} />
+          <Route path="/register" element={auth.user && !auth.isLoading ? <Navigate to={DEFAULT_AUTH_ROUTE} replace /> : <Register />} />
+          <Route path="/" element={auth.user && !auth.isLoading ? <Navigate to={DEFAULT_AUTH_ROUTE} replace /> : <Landing />} />
           <Route
             path="/dashboard"
             element={
@@ -68,6 +73,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Layout><AccountSettings /></Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/quick-data-entry"
+            element={
+              <ProtectedRoute>
+                <Layout><QuickDataEntry /></Layout>
               </ProtectedRoute>
             }
           />
@@ -120,7 +133,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to={DEFAULT_AUTH_ROUTE} replace />} />
         </Routes>
       </BrowserRouter>
     </AuthContext.Provider>

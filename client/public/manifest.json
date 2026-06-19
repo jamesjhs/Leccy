@@ -2,7 +2,7 @@
   "name": "Leccy – EV Cost Tracker",
   "short_name": "Leccy",
   "description": "Log and analyse the cost of charging your electric vehicle.",
-  "start_url": "/",
+  "start_url": "/quick-data-entry",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#166534",

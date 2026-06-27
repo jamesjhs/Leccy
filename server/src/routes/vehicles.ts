@@ -71,7 +71,7 @@ router.post('/', validate(createVehicleSchema), (req: Request, res: Response): v
 router.put('/:id', validate(updateVehicleSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const vehicleId = parseInt(req.params.id, 10);
+    const vehicleId = parseInt(String(req.params.id), 10);
 
     if (!Number.isInteger(vehicleId) || vehicleId <= 0) {
       res.status(400).json({ error: 'Invalid vehicle ID' });
@@ -120,7 +120,7 @@ router.put('/:id', validate(updateVehicleSchema), (req: Request, res: Response):
 router.delete('/:id', (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const vehicleId = parseInt(req.params.id, 10);
+    const vehicleId = parseInt(String(req.params.id), 10);
 
     if (!Number.isInteger(vehicleId) || vehicleId <= 0) {
       res.status(400).json({ error: 'Invalid vehicle ID' });

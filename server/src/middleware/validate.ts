@@ -21,7 +21,7 @@ export function validate<T>(schema: z.ZodSchema<T>) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req.body);
     if (!result.success) {
-      const details = result.error.errors.map(
+      const details = result.error.issues.map(
         (e) => `${e.path.join('.') || 'body'}: ${e.message}`
       );
       res.status(400).json({ error: 'Validation failed', details });
@@ -36,7 +36,7 @@ export function validateQuery<T>(schema: z.ZodSchema<T>) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req.query);
     if (!result.success) {
-      const details = result.error.errors.map(
+      const details = result.error.issues.map(
         (e) => `${e.path.join('.') || 'query'}: ${e.message}`
       );
       res.status(400).json({ error: 'Validation failed', details });
@@ -66,11 +66,11 @@ const pence = (maxPounds = 100_000) =>
 
 /** Finite non-negative real */
 const nnReal = (max: number) =>
-  z.number({ invalid_type_error: 'Must be a number' }).finite().nonnegative().max(max);
+  z.number().finite('Must be a number').nonnegative().max(max);
 
 /** Percentage 0–100 */
 const percentage = z
-  .number({ invalid_type_error: 'Must be a number' })
+  .number()
   .finite()
   .min(0)
   .max(100);
@@ -149,7 +149,7 @@ export const sessionSchema = z.object({
   final_battery_pct: percentage,
   final_range_miles: nnReal(1_000),
   air_temp_celsius: z
-    .number({ invalid_type_error: 'Must be a number' })
+    .number()
     .finite()
     .min(-60, 'Temperature below -60 °C is outside expected range')
     .max(60, 'Temperature above 60 °C is outside expected range'),
@@ -164,7 +164,7 @@ export const sessionUpdateSchema = sessionSchema.partial();
 export const chargerCostSchema = z.object({
   session_id: z.number().int().positive(),
   energy_kwh: z
-    .number({ invalid_type_error: 'Must be a number' })
+    .number()
     .finite()
     .positive('Must be greater than zero')
     .max(200, 'Energy exceeds expected maximum'),
@@ -182,7 +182,7 @@ export const chargerCostSchema = z.object({
 /** PUT /charger/:id */
 export const chargerCostUpdateSchema = z.object({
   energy_kwh: z
-    .number({ invalid_type_error: 'Must be a number' })
+    .number()
     .finite()
     .positive('Must be greater than zero')
     .max(200, 'Energy exceeds expected maximum')

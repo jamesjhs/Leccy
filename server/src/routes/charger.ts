@@ -72,7 +72,7 @@ router.post('/', validate(chargerCostSchema), (req: Request, res: Response): voi
 router.put('/:id', validate(chargerCostUpdateSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const costId = parseInt(req.params.id, 10);
+    const costId = parseInt(String(req.params.id), 10);
 
     if (!Number.isInteger(costId) || costId <= 0) {
       res.status(400).json({ error: 'Invalid cost ID' });
@@ -126,7 +126,7 @@ router.put('/:id', validate(chargerCostUpdateSchema), (req: Request, res: Respon
 router.delete('/:id', (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const costId = parseInt(req.params.id, 10);
+    const costId = parseInt(String(req.params.id), 10);
 
     if (!Number.isInteger(costId) || costId <= 0) {
       res.status(400).json({ error: 'Invalid cost ID' });

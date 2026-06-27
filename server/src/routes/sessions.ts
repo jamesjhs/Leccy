@@ -94,7 +94,7 @@ router.post('/', validate(sessionSchema), (req: Request, res: Response): void =>
 router.put('/:id', validate(sessionUpdateSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const sessionId = parseInt(req.params.id, 10);
+    const sessionId = parseInt(String(req.params.id), 10);
 
     if (!Number.isInteger(sessionId) || sessionId <= 0) {
       res.status(400).json({ error: 'Invalid session ID' });
@@ -163,7 +163,7 @@ router.put('/:id', validate(sessionUpdateSchema), (req: Request, res: Response):
 router.delete('/:id', (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const sessionId = parseInt(req.params.id, 10);
+    const sessionId = parseInt(String(req.params.id), 10);
 
     if (!Number.isInteger(sessionId) || sessionId <= 0) {
       res.status(400).json({ error: 'Invalid session ID' });

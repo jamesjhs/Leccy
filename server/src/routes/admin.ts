@@ -103,7 +103,7 @@ router.post('/users', validate(createUserSchema), (req: Request, res: Response):
 router.delete('/users/:id', (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const targetId = parseInt(req.params.id, 10);
+    const targetId = parseInt(String(req.params.id), 10);
 
     if (!Number.isInteger(targetId) || targetId <= 0) {
       res.status(400).json({ error: 'Invalid user ID' });

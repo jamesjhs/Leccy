@@ -3,5 +3,6 @@
 @tailwind utilities;
 
 body {
-  @apply bg-green-50 min-h-screen;
+  background-color: #f0fdf4;
+  min-height: 100vh;
 }

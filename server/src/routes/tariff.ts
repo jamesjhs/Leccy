@@ -50,7 +50,7 @@ router.post('/', validate(tariffSchema), (req: Request, res: Response): void => 
 router.put('/:id', validate(tariffUpdateSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const tariffId = parseInt(req.params.id, 10);
+    const tariffId = parseInt(String(req.params.id), 10);
 
     if (!Number.isInteger(tariffId) || tariffId <= 0) {
       res.status(400).json({ error: 'Invalid tariff ID' });
@@ -109,7 +109,7 @@ router.put('/:id', validate(tariffUpdateSchema), (req: Request, res: Response): 
 router.delete('/:id', (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const tariffId = parseInt(req.params.id, 10);
+    const tariffId = parseInt(String(req.params.id), 10);
 
     if (!Number.isInteger(tariffId) || tariffId <= 0) {
       res.status(400).json({ error: 'Invalid tariff ID' });

@@ -25,8 +25,10 @@ export default defineConfig({
     minify: 'esbuild',
     rollupOptions: {
       output: {
-        manualChunks: {
-          'router': ['react-router-dom'],
+        manualChunks(id) {
+          if (id.includes('node_modules/react-router') || id.includes('node_modules/@remix-run')) {
+            return 'router';
+          }
         },
       },
     },

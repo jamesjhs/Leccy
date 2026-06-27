@@ -150,7 +150,11 @@ if (IS_PROD) {
     res.sendFile(path.join(clientDist, 'manifest.json'));
   });
   app.use(express.static(clientDist));
-  app.get('*', apiLimiter, (_req, res) => {
+  app.use(apiLimiter, (req, res, next) => {
+    if (req.method !== 'GET' || req.path.startsWith('/api/')) {
+      next();
+      return;
+    }
     res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(clientDist, 'index.html'));
   });

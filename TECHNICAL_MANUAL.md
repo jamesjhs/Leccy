@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker v1.6.0: Technical Manual
+# Leccy — EV Cost Tracker v1.6.1: Technical Manual
 
 ## Architecture Overview
 
@@ -473,7 +473,7 @@ server {
 
 ## Progressive Web App (PWA)
 
-Leccy v1.6.0 ships as a fully installable PWA. The following files drive this:
+Leccy v1.6.1 ships as a fully installable PWA. The following files drive this:
 
 | File | Purpose |
 |---|---|
@@ -489,7 +489,7 @@ Leccy v1.6.0 ships as a fully installable PWA. The following files drive this:
 - **Navigation requests** (`mode === 'navigate'`): serve the cached SPA shell (`/`) so the app loads offline after the first visit.
 - **`/api/*` requests**: network-first; returns a JSON `503` error response when offline.
 - **All other static assets**: cache-first, populating the cache on the first fetch.
-- Cache is versioned (`leccy-1.6.0`); old caches are purged on activation.
+- Cache is versioned (`leccy-1.6.1`); old caches are purged on activation.
 - The client calls `registration.update()` on load, sends `SKIP_WAITING` to an installed update, and reloads when `controllerchange` fires so installed PWAs move to the newest app version promptly.
 - The production server serves `sw.js` with `Cache-Control: no-store` and `index.html` with `Cache-Control: no-cache` so update checks are not blocked by stale shell files.
 - Push events display charge reminder notifications, and notification clicks focus an existing Leccy window or open `/quick-data-entry`.
@@ -517,6 +517,12 @@ Example: £1.23 is stored as `123` pence.
 ---
 
 ## Changelog
+
+### v1.6.1
+
+- Fixed production startup on Express 5 by replacing the legacy `app.get('*')` SPA fallback with middleware that serves the React shell for non-API GET requests.
+- Updated client and server dependencies to current audit-clean releases, including React 19, React Router 7, Vite 8, Tailwind 4, Express 5, Nodemailer 9, Zod 4, and TypeScript 6.
+- Updated Tailwind, Vite, Zod, and Express compatibility code required by those dependency upgrades.
 
 ### v1.6.0
 

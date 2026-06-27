@@ -342,6 +342,8 @@ Summarises how much of the dataset has odometer continuity, measured kWh, vehicl
 | Summary badge | Avg GOM ratio = Σ `distance_driven` / Σ `estimated_range_consumed` shown above chart |
 | Tooltip | Date, GOM estimate, actual miles |
 
+The displayed scatter excludes extreme actual-to-estimated range ratios using the Iglewicz-Hoaglin robust modified z-score rule. The frontend calculates `ln(distance_driven / estimated_range_consumed)`, computes the median absolute deviation (MAD), and removes points with `|modified z-score| > 3.5` when at least five GOM pairs are available. This avoids the mean and standard deviation being pulled around by the same points being classified as outliers.
+
 ### Range Anxiety Gauge
 
 | Property | Value |

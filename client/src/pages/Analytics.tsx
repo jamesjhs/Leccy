@@ -11,6 +11,19 @@ import { analyticsApi, tariffApi, vehiclesApi, AnalyticsResult, TariffConfig, Ve
 type Period = 'week' | 'month' | 'all' | 'custom';
 type ChargeTypeFilter = 'all' | 'home' | 'public';
 
+interface GOMChartPoint {
+  estimated_range_consumed: number;
+  distance_driven: number;
+  date: string;
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
 function excludeStdDevOutliers<T>(
   data: T[],
   getValue: (item: T) => number,
@@ -27,6 +40,33 @@ function excludeStdDevOutliers<T>(
   if (stdDev === 0) return data;
 
   return data.filter((item) => Math.abs(getValue(item) - mean) <= maxStdDev * stdDev);
+}
+
+function excludeGOMOutliers(data: GOMChartPoint[]): { filtered: GOMChartPoint[]; removed: number } {
+  if (data.length < 5) return { filtered: data, removed: 0 };
+
+  const withLogRatio = data
+    .map((point) => ({
+      point,
+      value: Math.log(point.distance_driven / point.estimated_range_consumed),
+    }))
+    .filter(({ value }) => Number.isFinite(value));
+  if (withLogRatio.length < 5) return { filtered: data, removed: 0 };
+
+  const values = withLogRatio.map(({ value }) => value);
+  const center = median(values);
+  const deviations = values.map((value) => Math.abs(value - center));
+  const mad = median(deviations);
+  if (mad === 0) return { filtered: data, removed: 0 };
+
+  // Iglewicz-Hoaglin modified z-score: |Mi| > 3.5 is a robust outlier rule.
+  const kept = new Set(
+    withLogRatio
+      .filter(({ value }) => Math.abs((0.6745 * (value - center)) / mad) <= 3.5)
+      .map(({ point }) => point),
+  );
+  const filtered = data.filter((point) => kept.has(point));
+  return { filtered, removed: data.length - filtered.length };
 }
 
 function getDateRange(period: Period): { startDate?: string; endDate?: string } {
@@ -442,6 +482,7 @@ export default function Analytics() {
                 distance_driven: s.distance_driven!,
                 date: s.date,
               }));
+            const gomOutlierResult = excludeGOMOutliers(gomData);
 
             // Chart 4: Range Anxiety
             const anxietyData = es.map(s => s.initial_battery_percent);
@@ -467,9 +508,14 @@ export default function Analytics() {
                   </ChartCard>
                 )}
 
-                {gomData.length > 0 && (
+                {gomOutlierResult.filtered.length > 0 && (
                   <ChartCard title="GOM Accuracy: Estimated vs Real Range">
-                    <GOMAccuracyChart data={gomData} height={300} />
+                    <GOMAccuracyChart data={gomOutlierResult.filtered} height={300} />
+                    {gomOutlierResult.removed > 0 && (
+                      <p className="text-xs text-gray-400 mt-3">
+                        Excludes {gomOutlierResult.removed} outlier{gomOutlierResult.removed === 1 ? '' : 's'} using a robust modified z-score limit of 3.5 on actual-to-estimated range ratio.
+                      </p>
+                    )}
                   </ChartCard>
                 )}
 

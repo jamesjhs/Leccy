@@ -167,7 +167,9 @@ export default function UserManual({ onClose }: UserManualProps) {
                 <strong>GOM Accuracy:</strong> compares the car's estimated range consumed against
                 the actual miles you drove. Points above the diagonal line mean the car
                 under-estimated; points below mean it over-estimated. The accuracy ratio is shown as
-                a summary badge above the chart.
+                a summary badge above the chart. Extreme outliers are removed from the displayed
+                scatter using a robust modified z-score limit so one unusual trip does not dominate
+                the graph.
               </li>
               <li>
                 <strong>Range Anxiety Gauge:</strong> histogram of how full your battery is when you

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import db from '../db/database';
 import { authenticate } from '../middleware/auth';
-import { validateQuery, analyticsQuerySchema } from '../middleware/validate';
+import { validateQuery, analyticsQuerySchema, ValidatedQueryRequest } from '../middleware/validate';
 import {
   AuthenticatedRequest,
   AnalyticsResult,
@@ -56,11 +56,11 @@ function tempBand(temp: number): string {
 router.get('/', validateQuery(analyticsQuerySchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const { startDate, endDate, vehicleId } = req.query as {
+    const { startDate, endDate, vehicleId } = (req as ValidatedQueryRequest<{
       startDate?: string;
       endDate?: string;
       vehicleId?: string;
-    };
+    }>).validatedQuery ?? {};
 
     let whereClause = `WHERE cs.user_id = ?`;
     const params: (string | number)[] = [authReq.user!.userId];

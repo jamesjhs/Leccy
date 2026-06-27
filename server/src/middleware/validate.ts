@@ -6,12 +6,16 @@
  *  1. Parses the request body / query with the schema
  *  2. Strips any unknown keys (preventing mass-assignment and oversized payloads)
  *  3. Applies any transforms defined in the schema (e.g. .trim(), .toUpperCase())
- *  4. Replaces req.body / req.query with the cleaned, typed data
+ *  4. Replaces req.body or stores cleaned query data on req.validatedQuery
  *  5. Returns 400 with field-level messages on failure
  */
 
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+
+export interface ValidatedQueryRequest<T> extends Request {
+  validatedQuery?: T;
+}
 
 /* -------------------------------------------------------------------------
  * Middleware factories
@@ -33,7 +37,7 @@ export function validate<T>(schema: z.ZodSchema<T>) {
 }
 
 export function validateQuery<T>(schema: z.ZodSchema<T>) {
-  return (req: Request, res: Response, next: NextFunction): void => {
+  return (req: ValidatedQueryRequest<T>, res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req.query);
     if (!result.success) {
       const details = result.error.issues.map(
@@ -42,8 +46,7 @@ export function validateQuery<T>(schema: z.ZodSchema<T>) {
       res.status(400).json({ error: 'Validation failed', details });
       return;
     }
-    // Cast is safe — query params overwritten with sanitised values
-    (req as Request & { query: unknown }).query = result.data as Record<string, string>;
+    req.validatedQuery = result.data;
     next();
   };
 }

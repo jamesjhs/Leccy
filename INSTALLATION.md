@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker v1.4.0: Installation Guide
+# Leccy — EV Cost Tracker v1.6.0: Installation Guide
 
 ## Prerequisites
 
@@ -44,6 +44,9 @@ nano .env
 | `SMTP_USER` | SMTP username / email address |
 | `SMTP_PASS` | SMTP password |
 | `SMTP_FROM` | Sender address for outgoing emails |
+| `VAPID_PUBLIC_KEY` | Optional seed public VAPID key for PWA push notifications |
+| `VAPID_PRIVATE_KEY` | Optional seed private VAPID key for PWA push notifications |
+| `VAPID_SUBJECT` | Optional seed contact URI for VAPID, usually `mailto:admin@example.com` |
 | `CAR_BATTERY_KWH` | Your EV battery capacity in kWh |
 | `CAR_IDEAL_RANGE_MILES` | Manufacturer-rated range in miles |
 | `DOMAIN` | Public domain URL (for production) |
@@ -52,6 +55,16 @@ nano .env
 > ```bash
 > node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 > ```
+
+Generate VAPID keys for PWA push reminders from the `server` directory:
+
+```bash
+cd server
+npx web-push generate-vapid-keys
+cd ..
+```
+
+Copy the generated public/private keys into `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`, or sign in as an administrator and configure them from **Admin Panel → Web Push (VAPID)**. Settings saved in the Admin Panel take precedence over `.env`. Without these keys Leccy still runs, but charge reminder push notifications remain disabled.
 
 ---
 
@@ -296,7 +309,9 @@ curl https://leccy.jahosi.co.uk/api/auth/version
 
 ## 11. Installing as a mobile app (PWA)
 
-Leccy v1.4.0 is a fully-featured **Progressive Web App**. Once deployed behind HTTPS, supported browsers show an in-app install prompt on first load. Users can also install it directly from their browser menu with no app store required.
+Leccy v1.6.0 is a fully-featured **Progressive Web App**. Once deployed behind HTTPS, supported browsers show an in-app install prompt on first load. Users can also install it directly from their browser menu with no app store required.
+
+When VAPID keys are configured through `.env` or **Admin Panel → Web Push (VAPID)**, installed PWA users are prompted to enable push notifications on first PWA launch. If a Quick Entry charge start is saved and not yet submitted or cleared, Leccy sends a daily reminder at the user's configured reminder time, defaulting to **07:30**. Users can enable or disable these reminders and change the reminder time from **Account Settings**.
 
 ### Android (Chrome)
 

@@ -3,7 +3,7 @@
    Cache-first for static assets, network-first for /api/
    ============================================================ */
 
-const CACHE_NAME = 'leccy-1.4.0';
+const CACHE_NAME = 'leccy-1.6.0';
 
 const STATIC_ASSETS = [
   '/',
@@ -71,6 +71,57 @@ self.addEventListener('fetch', event => {
         }
         return response;
       }).catch(() => new Response('Offline', { status: 503 }));
+    })
+  );
+});
+
+self.addEventListener('push', event => {
+  let data = {
+    title: 'Leccy charge reminder',
+    body: 'A charge is in progress. Enter the end-charge data when you next use the car.',
+    icon: '/icons/icon-192x192.png',
+    badge: '/icons/icon-96x96.png',
+    url: '/quick-data-entry',
+    tag: 'leccy-charge-in-progress',
+  };
+
+  if (event.data) {
+    try {
+      data = { ...data, ...JSON.parse(event.data.text()) };
+    } catch {
+      // Keep defaults.
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon,
+      badge: data.badge,
+      data: { url: data.url },
+      tag: data.tag,
+      renotify: true,
+      timestamp: Date.now(),
+    })
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || '/quick-data-entry';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      const target = new URL(targetUrl, self.location.origin);
+      for (const client of clientList) {
+        const clientUrl = new URL(client.url);
+        if (clientUrl.origin === target.origin && 'focus' in client) {
+          client.focus();
+          if ('navigate' in client) client.navigate(target.href);
+          return;
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(target.href);
     })
   );
 });

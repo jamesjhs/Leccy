@@ -9,7 +9,27 @@ export interface User {
   display_name: string | null;
   failed_login_attempts: number;
   locked_until: string | null;
+  push_notifications_enabled: number;
+  push_reminder_time: string;
+  push_time_zone: string | null;
   created_at: string;
+}
+
+export interface PushSubscriptionRecord {
+  id: number;
+  user_id: number;
+  endpoint: string;
+  keys_p256dh: string;
+  keys_auth: string;
+  created_at: string;
+}
+
+export interface PendingChargeReminder {
+  user_id: number;
+  vehicle_id: number | null;
+  started_at: string;
+  last_notified_date: string | null;
+  updated_at: string;
 }
 
 export interface Vehicle {
@@ -60,6 +80,7 @@ export interface ChargerCost {
   energy_kwh: number;
   energy_source: 'measured' | 'estimated';
   price_pence: number;
+  price_calculated: number;
   charger_type: 'home' | 'public';
   charger_name: string | null;
   created_at: string;

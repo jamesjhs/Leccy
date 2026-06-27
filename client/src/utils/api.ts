@@ -135,6 +135,19 @@ export const publicApi = {
   stats: () => api.get<PublicStats>('/public/stats'),
 };
 
+// ---------- Push Notifications ----------
+export const pushApi = {
+  getVapidPublicKey: () => api.get<{ publicKey: string }>('/push/vapid-public-key'),
+  getSettings: () => api.get<PushSettings>('/push/settings'),
+  updateSettings: (data: Partial<Pick<PushSettings, 'enabled' | 'reminder_time' | 'time_zone'>>) =>
+    api.put<PushSettings>('/push/settings', data),
+  subscribe: (subscription: PushSubscriptionJSON) => api.post<{ ok: boolean }>('/push/subscribe', subscription),
+  unsubscribe: (endpoint: string) => api.delete('/push/subscribe', { endpoint }),
+  chargeStarted: (data: { vehicle_id?: number | null; started_at?: string; time_zone?: string | null }) =>
+    api.post<{ ok: boolean }>('/push/charge-started', data),
+  clearChargeStarted: () => api.delete('/push/charge-started'),
+};
+
 // ---------- Vehicles ----------
 export const vehiclesApi = {
   getAll: () => api.get<{ vehicles: Vehicle[] }>('/vehicles'),
@@ -150,6 +163,9 @@ export const adminApi = {
   deleteUser: (id: number) => api.delete(`/admin/users/${id}`),
   getSettings: () => api.get<{ settings: AppSetting[] }>('/admin/settings'),
   updateSettings: (data: Record<string, string>) => api.put('/admin/settings', data),
+  getVapidSettings: () => api.get<VapidSettings>('/admin/vapid'),
+  updateVapidSettings: (data: VapidSettingsUpdate) => api.put('/admin/vapid', data),
+  generateVapidKeys: () => api.get<Pick<VapidSettingsUpdate, 'publicKey' | 'privateKey'>>('/admin/vapid/generate'),
 };
 
 // ---------- Types ----------
@@ -176,6 +192,14 @@ export interface NewVehicle {
   nickname?: string;
   vehicle_type?: string;
   battery_kwh?: number | null;
+  apply_existing_data?: boolean;
+}
+
+export interface PushSettings {
+  enabled: boolean;
+  reminder_time: string;
+  time_zone: string | null;
+  configured: boolean;
 }
 
 export interface ChargingSession {
@@ -212,6 +236,7 @@ export interface ChargerCost {
   energy_kwh: number;
   energy_source: 'measured' | 'estimated';
   price_pence: number;
+  price_calculated: number;
   charger_type: 'home' | 'public';
   charger_name: string | null;
   created_at: string;
@@ -227,6 +252,7 @@ export interface NewChargerCost {
   energy_kwh: number;
   energy_source?: 'measured' | 'estimated';
   price_pence: number;
+  price_calculated?: boolean;
   charger_type: 'home' | 'public';
   charger_name?: string;
 }
@@ -274,6 +300,19 @@ export interface NewTariff {
 export interface AppSetting {
   key: string;
   value: string;
+}
+
+export interface VapidSettings {
+  publicKey: string;
+  subject: string;
+  privateKeyConfigured: boolean;
+  configured: boolean;
+}
+
+export interface VapidSettingsUpdate {
+  publicKey: string;
+  privateKey: string;
+  subject: string;
 }
 
 export interface NewUser {

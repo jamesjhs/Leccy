@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import webpush from 'web-push';
 import db, { getSetting, setSetting } from '../db/database';
 import { authenticate, requireAdmin } from '../middleware/auth';
+import { configureWebPush, startChargeReminderScheduler } from '../services/chargeReminderScheduler';
 import {
   validate,
   createUserSchema,
@@ -11,6 +13,44 @@ import { AuthenticatedRequest, User, AppSetting } from '../types';
 
 const router = Router();
 router.use(authenticate, requireAdmin);
+
+const VAPID_KEY_RE = /^[A-Za-z0-9\-_]+=*$/;
+const VAPID_PUBLIC_KEY_MIN = 80;
+const VAPID_PUBLIC_KEY_MAX = 100;
+const VAPID_PRIVATE_KEY_MIN = 38;
+const VAPID_PRIVATE_KEY_MAX = 50;
+
+function getVapidSetting(key: 'VAPID_PUBLIC_KEY' | 'VAPID_PRIVATE_KEY' | 'VAPID_SUBJECT'): string {
+  return getSetting(key) ?? process.env[key] ?? '';
+}
+
+function validateVapidSubject(subject: string): string | null {
+  const mailtoMatch = subject.match(/^mailto:([^\s]+)$/i);
+  if (mailtoMatch) {
+    const email = mailtoMatch[1];
+    const atIdx = email.indexOf('@');
+    if (atIdx > 0 && atIdx === email.lastIndexOf('@') && atIdx < email.length - 1) {
+      return null;
+    }
+    return 'VAPID subject mailto URI must contain a valid email address';
+  }
+
+  try {
+    const url = new URL(subject);
+    return url.protocol === 'https:' ? null : 'VAPID subject must be a mailto: URI or an https:// URL';
+  } catch {
+    return 'VAPID subject must be a mailto: URI or a valid https:// URL';
+  }
+}
+
+function validateVapidKey(key: string, type: 'public' | 'private'): string | null {
+  const min = type === 'public' ? VAPID_PUBLIC_KEY_MIN : VAPID_PRIVATE_KEY_MIN;
+  const max = type === 'public' ? VAPID_PUBLIC_KEY_MAX : VAPID_PRIVATE_KEY_MAX;
+  if (!VAPID_KEY_RE.test(key) || key.length < min || key.length > max) {
+    return `Invalid VAPID ${type} key format or length`;
+  }
+  return null;
+}
 
 // GET /admin/users
 router.get('/users', (_req: Request, res: Response): void => {
@@ -116,6 +156,88 @@ router.put('/settings', validate(smtpSettingsSchema), (req: Request, res: Respon
     res.json({ message: 'Settings updated' });
   } catch (err) {
     console.error('[admin/settings PUT]', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /admin/vapid
+router.get('/vapid', (_req: Request, res: Response): void => {
+  try {
+    const publicKey = getVapidSetting('VAPID_PUBLIC_KEY');
+    const privateKey = getVapidSetting('VAPID_PRIVATE_KEY');
+    const subject = getVapidSetting('VAPID_SUBJECT') || 'mailto:admin@localhost';
+    res.json({
+      publicKey,
+      subject,
+      privateKeyConfigured: privateKey !== '',
+      configured: publicKey !== '' && privateKey !== '',
+    });
+  } catch (err) {
+    console.error('[admin/vapid GET]', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /admin/vapid
+router.put('/vapid', (req: Request, res: Response): void => {
+  try {
+    const { publicKey, privateKey, subject } = req.body as {
+      publicKey?: unknown;
+      privateKey?: unknown;
+      subject?: unknown;
+    };
+
+    const nextPublicKey = typeof publicKey === 'string' && publicKey.trim() !== ''
+      ? publicKey.trim()
+      : getVapidSetting('VAPID_PUBLIC_KEY');
+    const nextPrivateKey = typeof privateKey === 'string' && privateKey.trim() !== ''
+      ? privateKey.trim()
+      : getVapidSetting('VAPID_PRIVATE_KEY');
+    const nextSubject = typeof subject === 'string' && subject.trim() !== ''
+      ? subject.trim()
+      : getVapidSetting('VAPID_SUBJECT') || 'mailto:admin@localhost';
+
+    if (nextPublicKey) {
+      const error = validateVapidKey(nextPublicKey, 'public');
+      if (error) {
+        res.status(400).json({ error });
+        return;
+      }
+    }
+    if (nextPrivateKey) {
+      const error = validateVapidKey(nextPrivateKey, 'private');
+      if (error) {
+        res.status(400).json({ error });
+        return;
+      }
+    }
+    const subjectError = validateVapidSubject(nextSubject);
+    if (subjectError) {
+      res.status(400).json({ error: subjectError });
+      return;
+    }
+
+    setSetting('VAPID_PUBLIC_KEY', nextPublicKey);
+    setSetting('VAPID_PRIVATE_KEY', nextPrivateKey);
+    setSetting('VAPID_SUBJECT', nextSubject);
+
+    configureWebPush();
+    startChargeReminderScheduler();
+
+    res.json({ message: 'VAPID settings updated' });
+  } catch (err) {
+    console.error('[admin/vapid PUT]', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /admin/vapid/generate
+router.get('/vapid/generate', (_req: Request, res: Response): void => {
+  try {
+    const keys = webpush.generateVAPIDKeys();
+    res.json({ publicKey: keys.publicKey, privateKey: keys.privateKey });
+  } catch (err) {
+    console.error('[admin/vapid/generate GET]', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

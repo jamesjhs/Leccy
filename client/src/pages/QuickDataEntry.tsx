@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import TariffSetupPrompt from '../components/TariffSetupPrompt';
 import {
   chargerApi,
   ChargingSession,
   NewSession,
+  pushApi,
   sessionsApi,
   TariffConfig,
   tariffApi,
@@ -15,6 +17,8 @@ const DEFAULT_HOME_CHARGE_RATE_KW = 7.4;
 const DRAFT_PREFIX = 'leccy.quickChargeDraft.v1';
 
 type ChargerType = 'home' | 'public';
+type FinishFieldName = 'final_battery_pct' | 'final_range_miles' | 'air_temp_celsius' | 'date_started' | 'date_unplugged';
+type StartFieldName = 'odometer_miles' | 'initial_battery_pct' | 'initial_range_miles';
 
 interface QuickDraft {
   vehicle_id: number | null;
@@ -37,6 +41,16 @@ interface FinishFields {
   away_kwh_source: 'measured' | 'estimated';
   away_price: string;
   away_price_mode: 'total' | 'per_kwh';
+}
+
+interface FinishSenseCheck {
+  message: string;
+  fields: FinishFieldName[];
+}
+
+interface StartSenseCheck {
+  message: string;
+  fields: StartFieldName[];
 }
 
 function todayIso(): string {
@@ -72,9 +86,74 @@ function draftKey(vehicleId: number | null): string {
   return `${DRAFT_PREFIX}.${vehicleId ?? 'none'}`;
 }
 
+function localTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
 function isNumberInRange(value: string, min: number, max: number): boolean {
   const n = Number(value);
   return value !== '' && Number.isFinite(n) && n >= min && n <= max;
+}
+
+function getFinishSenseCheckError(draft: QuickDraft | null, finish: FinishFields): FinishSenseCheck | null {
+  if (!draft) {
+    return { message: 'Save the charge start before finishing the session.', fields: [] };
+  }
+
+  const missingOrInvalidFields: FinishFieldName[] = [];
+  if (!isNumberInRange(finish.final_battery_pct, 0, 100)) missingOrInvalidFields.push('final_battery_pct');
+  if (!isNumberInRange(finish.final_range_miles, 0, 1000)) missingOrInvalidFields.push('final_range_miles');
+  if (finish.air_temp_celsius === '') missingOrInvalidFields.push('air_temp_celsius');
+  if (finish.date_unplugged === '') missingOrInvalidFields.push('date_unplugged');
+
+  if (missingOrInvalidFields.length > 0) {
+    return {
+      message: 'Complete the highlighted end charge fields before submitting.',
+      fields: missingOrInvalidFields,
+    };
+  }
+
+  if (!isNumberInRange(draft.odometer_miles, 0, 999999)) {
+    return { message: 'Check the saved start odometer before submitting.', fields: [] };
+  }
+
+  if (!isNumberInRange(finish.air_temp_celsius, -20, 60)) {
+    return {
+      message: 'Check the air temperature. Please enter a value between -20°C and 60°C.',
+      fields: ['air_temp_celsius'],
+    };
+  }
+
+  const startSoc = Number(draft.initial_battery_pct);
+  const endSoc = Number(finish.final_battery_pct);
+  if (endSoc < startSoc) {
+    return {
+      message: `End charge SOC (${endSoc}%) is lower than the start SOC (${startSoc}%). Please check the battery percentages.`,
+      fields: ['final_battery_pct'],
+    };
+  }
+
+  const startRange = Number(draft.initial_range_miles);
+  const endRange = Number(finish.final_range_miles);
+  if (endRange < startRange) {
+    return {
+      message: `End charge range (${endRange} mi) is lower than the start range (${startRange} mi). Please check the range values.`,
+      fields: ['final_range_miles'],
+    };
+  }
+
+  if (finish.date_started && finish.date_unplugged && finish.date_started > finish.date_unplugged) {
+    return {
+      message: 'Start date cannot be after the date unplugged. Please check the dates.',
+      fields: ['date_started', 'date_unplugged'],
+    };
+  }
+
+  return null;
 }
 
 export default function QuickDataEntry() {
@@ -105,6 +184,8 @@ export default function QuickDataEntry() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [startSenseCheck, setStartSenseCheck] = useState<StartSenseCheck | null>(null);
+  const [finishSenseCheck, setFinishSenseCheck] = useState<FinishSenseCheck | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -136,6 +217,8 @@ export default function QuickDataEntry() {
       setStartPct('');
       setStartRange('');
       setFinish((prev) => ({ ...prev, date_started: todayIso(), date_unplugged: todayIso() }));
+      setStartSenseCheck(null);
+      setFinishSenseCheck(null);
       return;
     }
 
@@ -181,6 +264,8 @@ export default function QuickDataEntry() {
   function saveStart() {
     setError(null);
     setMessage(null);
+    setStartSenseCheck(null);
+    setFinishSenseCheck(null);
     if (
       !isNumberInRange(startOdometer, 0, 999999) ||
       !isNumberInRange(startPct, 0, 100) ||
@@ -189,6 +274,15 @@ export default function QuickDataEntry() {
       setError('Enter a valid odometer, starting battery percentage, and range.');
       return;
     }
+
+    if (latestOdometer !== undefined && Number(startOdometer) < latestOdometer) {
+      setStartSenseCheck({
+        message: `Odometer (${Number(startOdometer)} mi) is lower than the previous reading (${latestOdometer} mi). Please check the mileage before saving.`,
+        fields: ['odometer_miles'],
+      });
+      return;
+    }
+
     const nextDraft: QuickDraft = {
       vehicle_id: selectedVehicleId,
       started_at: new Date().toISOString(),
@@ -197,6 +291,11 @@ export default function QuickDataEntry() {
       initial_range_miles: startRange,
     };
     localStorage.setItem(draftKey(selectedVehicleId), JSON.stringify(nextDraft));
+    void pushApi.chargeStarted({
+      vehicle_id: selectedVehicleId,
+      started_at: nextDraft.started_at,
+      time_zone: localTimeZone(),
+    }).catch(() => undefined);
     setDraft(nextDraft);
     setEditingStart(false);
     setFinish((prev) => ({ ...prev, date_started: nextDraft.started_at.split('T')[0] }));
@@ -205,6 +304,7 @@ export default function QuickDataEntry() {
 
   function clearDraft() {
     localStorage.removeItem(draftKey(selectedVehicleId));
+    void pushApi.clearChargeStarted().catch(() => undefined);
     setDraft(null);
     setEditingStart(false);
     setStartOdometer('');
@@ -212,10 +312,38 @@ export default function QuickDataEntry() {
     setStartRange('');
     setMessage(null);
     setError(null);
+    setStartSenseCheck(null);
+    setFinishSenseCheck(null);
+  }
+
+  function patchStart(field: StartFieldName, value: string) {
+    if (field === 'odometer_miles') setStartOdometer(value);
+    if (field === 'initial_battery_pct') setStartPct(value);
+    if (field === 'initial_range_miles') setStartRange(value);
+    setStartSenseCheck(null);
+  }
+
+  function hasStartFieldError(field: StartFieldName): boolean {
+    return startSenseCheck?.fields.includes(field) ?? false;
+  }
+
+  function patchFinish(patch: Partial<FinishFields>) {
+    setFinish((prev) => ({ ...prev, ...patch }));
+    setFinishSenseCheck(null);
+  }
+
+  function hasFinishFieldError(field: FinishFieldName): boolean {
+    return finishSenseCheck?.fields.includes(field) ?? false;
   }
 
   function applyKwhEstimate(type: ChargerType) {
     setError(null);
+    const senseCheckError = getFinishSenseCheckError(draft, finish);
+    if (senseCheckError) {
+      setFinishSenseCheck(senseCheckError);
+      return;
+    }
+    setFinishSenseCheck(null);
     if (socEstimatedKwh === null) {
       setError('Add vehicle battery size and end charge SOC before estimating kWh.');
       return;
@@ -223,9 +351,9 @@ export default function QuickDataEntry() {
 
     const value = String(socEstimatedKwh);
     if (type === 'home') {
-      setFinish((prev) => ({ ...prev, home_kwh: value, home_kwh_source: 'estimated' }));
+      patchFinish({ home_kwh: value, home_kwh_source: 'estimated' });
     } else {
-      setFinish((prev) => ({ ...prev, away_kwh: value, away_kwh_source: 'estimated' }));
+      patchFinish({ away_kwh: value, away_kwh_source: 'estimated' });
     }
   }
 
@@ -234,17 +362,12 @@ export default function QuickDataEntry() {
     setError(null);
     setMessage(null);
 
-    const requiredOk =
-      isNumberInRange(finish.final_battery_pct, 0, 100) &&
-      isNumberInRange(finish.final_range_miles, 0, 1000) &&
-      isNumberInRange(finish.air_temp_celsius, -60, 60) &&
-      isNumberInRange(draft.odometer_miles, 0, 999999) &&
-      finish.date_unplugged !== '';
-
-    if (!requiredOk) {
-      setError('Complete the end charge fields before submitting.');
+    const senseCheckError = getFinishSenseCheckError(draft, finish);
+    if (senseCheckError) {
+      setFinishSenseCheck(senseCheckError);
       return;
     }
+    setFinishSenseCheck(null);
 
     const energyKwh = finish.charger_type === 'home' ? homeKwh : awayKwh;
     const energySource = finish.charger_type === 'home' ? finish.home_kwh_source : finish.away_kwh_source;
@@ -289,10 +412,12 @@ export default function QuickDataEntry() {
           energy_kwh: energyKwh,
           energy_source: energySource,
           price_pence: Math.round(pricePounds * 100),
+          price_calculated: finish.charger_type === 'home' && homePrice !== null,
           charger_type: finish.charger_type,
         });
       }
       localStorage.removeItem(draftKey(selectedVehicleId));
+      void pushApi.clearChargeStarted().catch(() => undefined);
       setDraft(null);
       setEditingStart(false);
       setStartOdometer('');
@@ -312,6 +437,7 @@ export default function QuickDataEntry() {
         away_price: '',
         away_price_mode: 'total',
       });
+      setFinishSenseCheck(null);
       setMessage('Quick charge session submitted.');
       void loadData();
     } catch (err: unknown) {
@@ -349,6 +475,8 @@ export default function QuickDataEntry() {
           {error}
         </div>
       )}
+
+      {tariffs.length === 0 && <TariffSetupPrompt />}
 
       {vehicles.length === 0 ? (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-6 text-sm text-amber-800">
@@ -428,8 +556,8 @@ export default function QuickDataEntry() {
                     value={startOdometer}
                     onFocus={() => setOdometerFocused(true)}
                     onBlur={() => setOdometerFocused(false)}
-                    onChange={(e) => setStartOdometer(e.target.value)}
-                    className={inputClass}
+                    onChange={(e) => patchStart('odometer_miles', e.target.value)}
+                    className={`${inputClass} ${hasStartFieldError('odometer_miles') ? inputErrorClass : ''}`}
                   />
                 </FormField>
                 <FormField label="Start Battery %">
@@ -440,8 +568,8 @@ export default function QuickDataEntry() {
                     step="1"
                     inputMode="numeric"
                     value={startPct}
-                    onChange={(e) => setStartPct(e.target.value)}
-                    className={inputClass}
+                    onChange={(e) => patchStart('initial_battery_pct', e.target.value)}
+                    className={`${inputClass} ${hasStartFieldError('initial_battery_pct') ? inputErrorClass : ''}`}
                   />
                 </FormField>
                 <FormField label="Start Range (mi)">
@@ -452,11 +580,17 @@ export default function QuickDataEntry() {
                     step="0.1"
                     inputMode="decimal"
                     value={startRange}
-                    onChange={(e) => setStartRange(e.target.value)}
-                    className={inputClass}
+                    onChange={(e) => patchStart('initial_range_miles', e.target.value)}
+                    className={`${inputClass} ${hasStartFieldError('initial_range_miles') ? inputErrorClass : ''}`}
                   />
                 </FormField>
               </div>
+
+              {startSenseCheck && (
+                <div className="bg-red-50 border border-red-300 text-red-700 rounded-lg px-4 py-3 mt-5 text-sm">
+                  {startSenseCheck.message}
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-3 mt-5">
                 <button
@@ -486,8 +620,8 @@ export default function QuickDataEntry() {
                     step="1"
                     inputMode="numeric"
                     value={finish.final_battery_pct}
-                    onChange={(e) => setFinish((prev) => ({ ...prev, final_battery_pct: e.target.value }))}
-                    className={inputClass}
+                    onChange={(e) => patchFinish({ final_battery_pct: e.target.value })}
+                    className={`${inputClass} ${hasFinishFieldError('final_battery_pct') ? inputErrorClass : ''}`}
                   />
                 </FormField>
                 <FormField label="End charge range (mi)">
@@ -498,20 +632,20 @@ export default function QuickDataEntry() {
                     step="0.1"
                     inputMode="decimal"
                     value={finish.final_range_miles}
-                    onChange={(e) => setFinish((prev) => ({ ...prev, final_range_miles: e.target.value }))}
-                    className={inputClass}
+                    onChange={(e) => patchFinish({ final_range_miles: e.target.value })}
+                    className={`${inputClass} ${hasFinishFieldError('final_range_miles') ? inputErrorClass : ''}`}
                   />
                 </FormField>
                 <FormField label="Air Temp (C)">
                   <input
                     type="number"
-                    min="-60"
+                    min="-20"
                     max="60"
                     step="0.1"
                     inputMode="decimal"
                     value={finish.air_temp_celsius}
-                    onChange={(e) => setFinish((prev) => ({ ...prev, air_temp_celsius: e.target.value }))}
-                    className={inputClass}
+                    onChange={(e) => patchFinish({ air_temp_celsius: e.target.value })}
+                    className={`${inputClass} ${hasFinishFieldError('air_temp_celsius') ? inputErrorClass : ''}`}
                   />
                 </FormField>
               </div>
@@ -521,16 +655,16 @@ export default function QuickDataEntry() {
                   <input
                     type="date"
                     value={finish.date_started}
-                    onChange={(e) => setFinish((prev) => ({ ...prev, date_started: e.target.value }))}
-                    className={inputClass}
+                    onChange={(e) => patchFinish({ date_started: e.target.value })}
+                    className={`${inputClass} ${hasFinishFieldError('date_started') ? inputErrorClass : ''}`}
                   />
                 </FormField>
                 <FormField label="Date Unplugged">
                   <input
                     type="date"
                     value={finish.date_unplugged}
-                    onChange={(e) => setFinish((prev) => ({ ...prev, date_unplugged: e.target.value }))}
-                    className={inputClass}
+                    onChange={(e) => patchFinish({ date_unplugged: e.target.value })}
+                    className={`${inputClass} ${hasFinishFieldError('date_unplugged') ? inputErrorClass : ''}`}
                   />
                 </FormField>
                 <div>
@@ -546,7 +680,7 @@ export default function QuickDataEntry() {
                   <FormField label="Charge Type">
                     <select
                       value={finish.charger_type}
-                      onChange={(e) => setFinish((prev) => ({ ...prev, charger_type: e.target.value as ChargerType }))}
+                      onChange={(e) => patchFinish({ charger_type: e.target.value as ChargerType })}
                       className={inputClass}
                     >
                       <option value="home">Home</option>
@@ -559,9 +693,9 @@ export default function QuickDataEntry() {
                       <FormField label="Home kWh">
                         <KwhInput
                           value={finish.home_kwh}
-                          onChange={(value) => setFinish((prev) => ({ ...prev, home_kwh: value, home_kwh_source: 'measured' }))}
+                          onChange={(value) => patchFinish({ home_kwh: value, home_kwh_source: 'measured' })}
                           onEstimate={() => applyKwhEstimate('home')}
-                          disabledEstimate={socEstimatedKwh === null}
+                          disabledEstimate={false}
                         />
                       </FormField>
                       <div>
@@ -576,9 +710,9 @@ export default function QuickDataEntry() {
                       <FormField label="Away kWh">
                         <KwhInput
                           value={finish.away_kwh}
-                          onChange={(value) => setFinish((prev) => ({ ...prev, away_kwh: value, away_kwh_source: 'measured' }))}
+                          onChange={(value) => patchFinish({ away_kwh: value, away_kwh_source: 'measured' })}
                           onEstimate={() => applyKwhEstimate('public')}
-                          disabledEstimate={socEstimatedKwh === null}
+                          disabledEstimate={false}
                         />
                       </FormField>
                       <FormField label={finish.away_price_mode === 'per_kwh' ? 'Away Price (£/kWh)' : 'Away Price (£)'}>
@@ -590,15 +724,14 @@ export default function QuickDataEntry() {
                           step="0.01"
                           inputMode="decimal"
                           value={finish.away_price}
-                          onChange={(e) => setFinish((prev) => ({ ...prev, away_price: e.target.value }))}
+                          onChange={(e) => patchFinish({ away_price: e.target.value })}
                           className="min-w-0 flex-1 px-3 py-2 text-sm focus:outline-none"
                         />
                         <button
                           type="button"
-                          onClick={() => setFinish((prev) => ({
-                            ...prev,
-                            away_price_mode: prev.away_price_mode === 'total' ? 'per_kwh' : 'total',
-                          }))}
+                          onClick={() => patchFinish({
+                            away_price_mode: finish.away_price_mode === 'total' ? 'per_kwh' : 'total',
+                          })}
                           className="shrink-0 border-l border-gray-200 px-3 text-xs font-semibold text-green-700 hover:bg-green-50"
                           title="Toggle between total price and price per kWh"
                         >
@@ -613,6 +746,12 @@ export default function QuickDataEntry() {
                   Estimate uses SOC gained × vehicle battery size{selectedVehicle?.battery_kwh ? ` (${selectedVehicle.battery_kwh} kWh)` : ''}.
                 </p>
               </div>
+
+              {finishSenseCheck && (
+                <div className="bg-red-50 border border-red-300 text-red-700 rounded-lg px-4 py-3 text-sm">
+                  {finishSenseCheck.message}
+                </div>
+              )}
 
               <button
                 type="button"
@@ -632,6 +771,9 @@ export default function QuickDataEntry() {
 
 const inputClass =
   'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent';
+
+const inputErrorClass =
+  'border-red-400 bg-red-50 focus:ring-red-500 focus:border-transparent';
 
 function FormField({ label, children }: { label: string; children: ReactNode }) {
   return (

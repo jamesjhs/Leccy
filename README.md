@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker · v1.4.0
+# Leccy — EV Cost Tracker · v1.6.0
 
 A full-stack web application for logging and analysing the cost of charging an electric vehicle. Installs as a native-feeling app on Android (Chrome) and iOS (Safari), with an in-app install prompt where supported.
 
@@ -10,11 +10,12 @@ A full-stack web application for logging and analysing the cost of charging an e
 - Maintain a vehicle maintenance log
 - Manage electricity tariffs over time
 - Analytics dashboard with charts for cost, kWh, odometer-based efficiency, temperature effects, and savings
-- **Advanced analytics** — Ownership Intelligence, Home vs Away Economics, Odometer-Based Efficiency, Temperature-Normalised Efficiency, Measured-kWh Usable Capacity Proxy, Data Quality, GOM Accuracy, Range Anxiety Gauge, and Charging Habits (v1.4.0)
+- **Guided setup and safer entry** — tariff/vehicle setup prompts, first-vehicle data assignment, Quick Entry sense checks, historical tariff cost calculation, and autosaving Charging Sessions edits with revert support
+- **Advanced analytics** — Ownership Intelligence, Home vs Away Economics, Odometer-Based Efficiency, Temperature-Normalised Efficiency, Measured-kWh Usable Capacity Proxy, Data Quality, GOM Accuracy, Range Anxiety Gauge, and Charging Habits
 - **Security hardened** — JWT algorithm pinned, production startup guards, SMTP credential masking, production log sanitisation (v1.2.0)
 - **Quick Data Entry** — save charge-start odometer, SOC, and range, then complete end-charge SOC, range, temperature, kWh, and cost later (v1.3.1)
-- **PWA install and update handling** — first-load install prompt where supported, service-worker update checks, and automatic reload when a new app version activates (v1.3.1)
-- Multi-user support with admin panel
+- **PWA install, reminders, and update handling** — first-load install prompt where supported, VAPID push reminders for in-progress Quick Entry charges, service-worker update checks, and automatic reload when a new app version activates
+- Multi-user support with admin panel, including SMTP settings, user management, and Web Push VAPID key configuration
 - **Progressive Web App (PWA)** — install on Android or iOS for a full-screen, app-like experience
 
 ## Quick start
@@ -37,4 +38,8 @@ npm start
 
 ## Version
 
-**1.4.0**
+**1.6.0**
+
+Adds admin-managed Web Push VAPID settings, including public/private key storage, subject editing, generated key pairs, masked private-key status, and runtime push configuration without relying only on `.env`.
+
+**1.5.0**

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import TariffSetupPrompt from '../components/TariffSetupPrompt';
 import {
   sessionsApi, chargerApi, tariffApi, vehiclesApi,
   ChargingSession, ChargerCostWithDate, TariffConfig, NewSession, Vehicle,
@@ -55,6 +56,13 @@ function calcHomeChargeCost(kwh: number, tariff: TariffConfig): number {
   return Math.round(offPeakKwh * offPeakRate + peakKwh * peakRate) / 100;
 }
 
+function getTariffForDate(tariffs: TariffConfig[], date: string): TariffConfig | null {
+  const eligibleTariffs = tariffs
+    .filter((tariff) => tariff.effective_from <= date)
+    .sort((a, b) => b.effective_from.localeCompare(a.effective_from));
+  return eligibleTariffs[0] ?? null;
+}
+
 // ─── Cost draft per session ────────────────────────────────────────────────
 interface CostDraft {
   costId?: number;          // present if already saved to DB
@@ -63,10 +71,21 @@ interface CostDraft {
   energySource: 'measured' | 'estimated';
   price: string;
   isEstimate: boolean;
+  priceCalculated: boolean;
 }
 
-// ─── Session edits per row ────────────────────────────────────────────────
-type SessionEdit = Partial<Omit<ChargingSession, 'id' | 'user_id' | 'vehicle_id' | 'created_at'>>;
+type SessionPatch = Partial<Omit<ChargingSession, 'id' | 'user_id' | 'vehicle_id' | 'created_at'>>;
+
+interface RowSnapshot {
+  session: ChargingSession;
+  costDraft: CostDraft;
+}
+
+interface RevertState {
+  sessionId: number;
+  kind: 'edit' | 'delete';
+  snapshot: RowSnapshot;
+}
 
 interface CsvRowResult {
   lineNumber: number;
@@ -203,6 +222,23 @@ function buildCsvStats(rows: CsvRowResult[]): CsvStats {
   };
 }
 
+function emptyCostDraft(): CostDraft {
+  return {
+    type: '',
+    kwh: '',
+    energySource: 'measured',
+    price: '',
+    isEstimate: false,
+    priceCalculated: false,
+  };
+}
+
+function isPersistableCostDraft(draft: CostDraft): draft is CostDraft & { type: 'home' | 'public' } {
+  const kwh = Number(draft.kwh);
+  const pricePence = Math.round(Number(draft.price) * 100);
+  return draft.type !== '' && Number.isFinite(kwh) && kwh > 0 && Number.isFinite(pricePence) && pricePence >= 0;
+}
+
 export default function DataEntry() {
   const [sessions, setSessions] = useState<ChargingSession[]>([]);
   const [costs, setCosts] = useState<ChargerCostWithDate[]>([]);
@@ -210,8 +246,8 @@ export default function DataEntry() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [costDrafts, setCostDrafts] = useState<Record<number, CostDraft>>({});
-  const [sessionEdits, setSessionEdits] = useState<Record<number, SessionEdit>>({});
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [lastRevert, setLastRevert] = useState<RevertState | null>(null);
   const [enumerating, setEnumerating] = useState(false);
 
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
@@ -223,9 +259,15 @@ export default function DataEntry() {
   const [hasTestedCsv, setHasTestedCsv] = useState(false);
   const [showEstimateKwhConfirm, setShowEstimateKwhConfirm] = useState(false);
 
-  // Keep latest tariff and historical ratio available in callbacks
-  const tariffRef = useRef<TariffConfig | null>(null);
+  // Keep tariffs and historical ratio available in callbacks
+  const tariffsRef = useRef<TariffConfig[]>([]);
   const historicalRatioRef = useRef<number | null>(null);
+  const costDraftsRef = useRef<Record<number, CostDraft>>({});
+  const costCreatePendingRef = useRef<Record<number, boolean>>({});
+
+  useEffect(() => {
+    costDraftsRef.current = costDrafts;
+  }, [costDrafts]);
 
   // ─── Build drafts from fetched data ──────────────────────────────────────
   const buildDrafts = useCallback(
@@ -250,8 +292,7 @@ export default function DataEntry() {
 
       historicalRatioRef.current = historicalRatio;
 
-      const currentTariff = tariffs[0] ?? null;
-      tariffRef.current = currentTariff;
+      tariffsRef.current = tariffs;
 
       const drafts: Record<number, CostDraft> = {};
       for (const s of sessions) {
@@ -263,7 +304,8 @@ export default function DataEntry() {
             kwh: String(existing.energy_kwh),
             energySource: existing.energy_source ?? 'measured',
             price: (existing.price_pence / 100).toFixed(2),
-            isEstimate: false,
+            isEstimate: existing.energy_source === 'estimated',
+            priceCalculated: existing.price_calculated === 1,
           };
         } else {
           drafts[s.id] = {
@@ -272,9 +314,11 @@ export default function DataEntry() {
             energySource: 'measured',
             price: '',
             isEstimate: false,
+            priceCalculated: false,
           };
         }
       }
+      costDraftsRef.current = drafts;
       setCostDrafts(drafts);
     },
     [],
@@ -299,8 +343,6 @@ export default function DataEntry() {
         setSelectedVehicleId(fetchedVehicles[0].id);
       }
       buildDrafts(sessRes.data.sessions, costsRes.data.costs, tariffRes.data.tariffs);
-      // Clear any pending session edits so refreshed data is shown cleanly
-      setSessionEdits({});
     } catch {/* ignore */}
   }, [buildDrafts, selectedVehicleId]);
 
@@ -371,86 +413,234 @@ export default function DataEntry() {
   }
 
   async function deleteSession(id: number) {
-    if (!confirm('Delete this session?')) return;
+    clearPendingDeletedRow(id);
+    const session = sessions.find((s) => s.id === id);
+    if (!session) return;
+    const costDraft = costDrafts[id] ?? emptyCostDraft();
+
+    setFormError(null);
+    setSavingId(id);
+    setLastRevert({
+      sessionId: id,
+      kind: 'delete',
+      snapshot: {
+        session: { ...session },
+        costDraft: { ...costDraft },
+      },
+    });
     try {
       await sessionsApi.delete(id);
+    } catch {
+      setLastRevert(null);
+      setFormError('Could not delete that session. Please try again.');
       void loadData();
-    } catch {/* ignore */}
-  }
-
-  // ─── Save row: persist session edits + cost draft ─────────────────────────
-  async function saveRow(sessionId: number) {
-    const draft = costDrafts[sessionId];
-    if (!draft) return;
-
-    const kwh = Number(draft.kwh);
-    const pricePence = Math.round(Number(draft.price) * 100);
-    if (draft.type === '') return;
-    if (!isFinite(kwh) || kwh <= 0 || !isFinite(pricePence) || pricePence < 0) return;
-
-    setSavingId(sessionId);
-    try {
-      // Save session field edits if any changes were made
-      const edits = sessionEdits[sessionId];
-      if (edits && Object.keys(edits).length > 0) {
-        await sessionsApi.update(sessionId, edits);
-        setSessionEdits((prev) => {
-          const next = { ...prev };
-          delete next[sessionId];
-          return next;
-        });
-      }
-
-      // Save cost draft
-      if (draft.costId) {
-        await chargerApi.update(draft.costId, {
-          energy_kwh: kwh,
-          energy_source: draft.energySource,
-          price_pence: pricePence,
-          charger_type: draft.type,
-        });
-      } else {
-        const res = await chargerApi.create({
-          session_id: sessionId,
-          energy_kwh: kwh,
-          energy_source: draft.energySource,
-          price_pence: pricePence,
-          charger_type: draft.type,
-        });
-        setCostDrafts((prev) => ({
-          ...prev,
-          [sessionId]: { ...prev[sessionId], costId: res.data.cost.id, isEstimate: false },
-        }));
-      }
-      setCostDrafts((prev) => ({
-        ...prev,
-        [sessionId]: { ...prev[sessionId], isEstimate: false },
-      }));
-      void loadData();
-    } catch {/* ignore */} finally {
+    } finally {
       setSavingId(null);
     }
   }
 
-  function patchDraft(sessionId: number, patch: Partial<CostDraft>) {
-    setCostDrafts((prev) => ({
-      ...prev,
-      [sessionId]: { ...prev[sessionId], ...patch },
-    }));
+  function clearPendingDeletedRow(nextSessionId: number) {
+    if (lastRevert?.kind !== 'delete' || lastRevert.sessionId === nextSessionId) return;
+    const deletedSessionId = lastRevert.sessionId;
+    setSessions((prev) => prev.filter((s) => s.id !== deletedSessionId));
+    setCostDrafts((prev) => {
+      const next = { ...prev };
+      delete next[deletedSessionId];
+      return next;
+    });
   }
 
-  function patchSessionEdit(sessionId: number, patch: SessionEdit) {
-    setSessionEdits((prev) => ({
+  function captureRevertSnapshot(sessionId: number) {
+    clearPendingDeletedRow(sessionId);
+    setLastRevert((current) => {
+      if (current?.sessionId === sessionId) return current;
+      const session = sessions.find((s) => s.id === sessionId);
+      if (!session) return current;
+      const costDraft = costDrafts[sessionId] ?? emptyCostDraft();
+      return {
+        sessionId,
+        kind: 'edit',
+        snapshot: {
+          session: { ...session },
+          costDraft: { ...costDraft },
+        },
+      };
+    });
+  }
+
+  async function patchSessionEdit(sessionId: number, patch: SessionPatch) {
+    captureRevertSnapshot(sessionId);
+    setFormError(null);
+    setSavingId(sessionId);
+    setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, ...patch } : s)));
+    try {
+      const res = await sessionsApi.update(sessionId, patch);
+      setSessions((prev) => prev.map((s) => (s.id === sessionId ? res.data.session : s)));
+    } catch {
+      setFormError('Could not save that session change. Please try again.');
+      void loadData();
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function patchDraft(sessionId: number, patch: Partial<CostDraft>) {
+    captureRevertSnapshot(sessionId);
+    setFormError(null);
+    const currentDraft = costDrafts[sessionId] ?? emptyCostDraft();
+    const nextDraft = { ...currentDraft, ...patch };
+
+    setCostDrafts((prev) => ({
       ...prev,
-      [sessionId]: { ...prev[sessionId], ...patch },
+      [sessionId]: nextDraft,
     }));
+    costDraftsRef.current = {
+      ...costDraftsRef.current,
+      [sessionId]: nextDraft,
+    };
+
+    if (!isPersistableCostDraft(nextDraft)) return;
+
+    const kwh = Number(nextDraft.kwh);
+    const pricePence = Math.round(Number(nextDraft.price) * 100);
+
+    setSavingId(sessionId);
+    try {
+      if (nextDraft.costId) {
+        await chargerApi.update(nextDraft.costId, {
+          energy_kwh: kwh,
+          energy_source: nextDraft.energySource,
+          price_pence: pricePence,
+          price_calculated: nextDraft.priceCalculated,
+          charger_type: nextDraft.type,
+        });
+      } else if (!costCreatePendingRef.current[sessionId]) {
+        costCreatePendingRef.current[sessionId] = true;
+        const res = await chargerApi.create({
+          session_id: sessionId,
+          energy_kwh: kwh,
+          energy_source: nextDraft.energySource,
+          price_pence: pricePence,
+          price_calculated: nextDraft.priceCalculated,
+          charger_type: nextDraft.type,
+        });
+        costCreatePendingRef.current[sessionId] = false;
+        setCostDrafts((prev) => ({
+          ...prev,
+          [sessionId]: { ...prev[sessionId], costId: res.data.cost.id },
+        }));
+        costDraftsRef.current = {
+          ...costDraftsRef.current,
+          [sessionId]: { ...costDraftsRef.current[sessionId], costId: res.data.cost.id },
+        };
+
+        const latestDraft = costDraftsRef.current[sessionId];
+        if (latestDraft && isPersistableCostDraft(latestDraft)) {
+          await chargerApi.update(res.data.cost.id, {
+            energy_kwh: Number(latestDraft.kwh),
+            energy_source: latestDraft.energySource,
+            price_pence: Math.round(Number(latestDraft.price) * 100),
+            price_calculated: latestDraft.priceCalculated,
+            charger_type: latestDraft.type,
+          });
+        } else {
+          await chargerApi.delete(res.data.cost.id);
+          setCostDrafts((prev) => ({
+            ...prev,
+            [sessionId]: { ...prev[sessionId], costId: undefined },
+          }));
+          costDraftsRef.current = {
+            ...costDraftsRef.current,
+            [sessionId]: { ...costDraftsRef.current[sessionId], costId: undefined },
+          };
+        }
+      }
+    } catch {
+      costCreatePendingRef.current[sessionId] = false;
+      setFormError('Could not save that charging cost change. Please try again.');
+      void loadData();
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function revertLastRowChange() {
+    if (!lastRevert) return;
+    const { sessionId, kind, snapshot } = lastRevert;
+    const currentDraft = costDrafts[sessionId] ?? emptyCostDraft();
+
+    setFormError(null);
+    setSavingId(sessionId);
+    setSessions((prev) => prev.map((s) => (s.id === sessionId ? snapshot.session : s)));
+    setCostDrafts((prev) => ({
+      ...prev,
+      [sessionId]: snapshot.costDraft,
+    }));
+
+    try {
+      if (kind === 'delete') {
+        const res = await sessionsApi.create({
+          vehicle_id: snapshot.session.vehicle_id,
+          odometer_miles: snapshot.session.odometer_miles,
+          initial_battery_pct: snapshot.session.initial_battery_pct,
+          initial_range_miles: snapshot.session.initial_range_miles,
+          final_battery_pct: snapshot.session.final_battery_pct,
+          final_range_miles: snapshot.session.final_range_miles,
+          air_temp_celsius: snapshot.session.air_temp_celsius,
+          date_started: snapshot.session.date_started,
+          date_unplugged: snapshot.session.date_unplugged,
+        });
+
+        if (isPersistableCostDraft(snapshot.costDraft)) {
+          await chargerApi.create({
+            session_id: res.data.session.id,
+            energy_kwh: Number(snapshot.costDraft.kwh),
+            energy_source: snapshot.costDraft.energySource,
+            price_pence: Math.round(Number(snapshot.costDraft.price) * 100),
+            price_calculated: snapshot.costDraft.priceCalculated,
+            charger_type: snapshot.costDraft.type,
+          });
+        }
+      } else {
+        await sessionsApi.update(sessionId, {
+        odometer_miles: snapshot.session.odometer_miles,
+        initial_battery_pct: snapshot.session.initial_battery_pct,
+        initial_range_miles: snapshot.session.initial_range_miles,
+        final_battery_pct: snapshot.session.final_battery_pct,
+        final_range_miles: snapshot.session.final_range_miles,
+        air_temp_celsius: snapshot.session.air_temp_celsius,
+        date_started: snapshot.session.date_started,
+        date_unplugged: snapshot.session.date_unplugged,
+        });
+
+        if (snapshot.costDraft.costId && isPersistableCostDraft(snapshot.costDraft)) {
+          await chargerApi.update(snapshot.costDraft.costId, {
+            energy_kwh: Number(snapshot.costDraft.kwh),
+            energy_source: snapshot.costDraft.energySource,
+            price_pence: Math.round(Number(snapshot.costDraft.price) * 100),
+            price_calculated: snapshot.costDraft.priceCalculated,
+            charger_type: snapshot.costDraft.type,
+          });
+        } else if (currentDraft.costId && !snapshot.costDraft.costId) {
+          await chargerApi.delete(currentDraft.costId);
+        }
+      }
+
+      setLastRevert(null);
+      void loadData();
+    } catch {
+      setFormError('Could not revert that row. Please try again.');
+      void loadData();
+    } finally {
+      setSavingId(null);
+    }
   }
 
   // ─── Auto-enumerate costs ─────────────────────────────────────────────────
   // Calculates and saves home charge costs for every Home row currently showing £0.00.
   async function autoEnumerateCosts() {
-    const currentTariff = tariffRef.current;
-    if (!currentTariff) return;
+    const availableTariffs = tariffsRef.current;
+    if (availableTariffs.length === 0) return;
 
     const targets = sessions.filter((s) => {
       const draft = costDrafts[s.id];
@@ -465,11 +655,14 @@ export default function DataEntry() {
           const draft = costDrafts[s.id];
           const kwh = Number(draft.kwh);
           if (!isFinite(kwh) || kwh <= 0) return;
-          const pricePence = Math.round(calcHomeChargeCost(kwh, currentTariff) * 100);
+          const tariff = getTariffForDate(availableTariffs, s.date_unplugged);
+          if (!tariff) return;
+          const pricePence = Math.round(calcHomeChargeCost(kwh, tariff) * 100);
           if (draft.costId) {
             await chargerApi.update(draft.costId, {
               energy_kwh: kwh,
               price_pence: pricePence,
+              price_calculated: true,
               charger_type: 'home',
             });
           } else {
@@ -477,6 +670,7 @@ export default function DataEntry() {
               session_id: s.id,
               energy_kwh: kwh,
               price_pence: pricePence,
+              price_calculated: true,
               charger_type: 'home',
             });
           }
@@ -488,19 +682,24 @@ export default function DataEntry() {
     }
   }
 
-  function estimateKwhInputs() {
+  async function estimateKwhInputs() {
+    const updates = sessions.flatMap((s) => {
+      const vehicle = vehicles.find((v) => v.id === (s.vehicle_id ?? selectedVehicleId));
+      if (!vehicle?.battery_kwh) return [];
+
+      const pctCharged = s.final_battery_pct - s.initial_battery_pct;
+      if (pctCharged <= 0) return [];
+
+      const estimatedKwh = Math.round(vehicle.battery_kwh * (pctCharged / 100) * 100) / 100;
+      return [{ session: s, estimatedKwh }];
+    });
+
+    setShowEstimateKwhConfirm(false);
     setCostDrafts((prev) => {
       const next = { ...prev };
-      for (const s of sessions) {
-        const vehicle = vehicles.find((v) => v.id === (s.vehicle_id ?? selectedVehicleId));
-        if (!vehicle?.battery_kwh) continue;
-
-        const pctCharged = s.final_battery_pct - s.initial_battery_pct;
-        if (pctCharged <= 0) continue;
-
-        const estimatedKwh = Math.round(vehicle.battery_kwh * (pctCharged / 100) * 100) / 100;
-        const current = next[s.id] ?? { type: '', kwh: '', energySource: 'measured', price: '', isEstimate: false };
-        next[s.id] = {
+      for (const { session, estimatedKwh } of updates) {
+        const current = next[session.id] ?? emptyCostDraft();
+        next[session.id] = {
           ...current,
           kwh: String(estimatedKwh),
           energySource: 'estimated',
@@ -509,12 +708,58 @@ export default function DataEntry() {
       }
       return next;
     });
-    setShowEstimateKwhConfirm(false);
+
+    setEnumerating(true);
+    try {
+      await Promise.all(
+        updates.map(async ({ session, estimatedKwh }) => {
+          const current = costDrafts[session.id] ?? emptyCostDraft();
+          const nextDraft = {
+            ...current,
+            kwh: String(estimatedKwh),
+            energySource: 'estimated' as const,
+            isEstimate: true,
+          };
+          if (!isPersistableCostDraft(nextDraft)) return;
+
+          if (nextDraft.costId) {
+            await chargerApi.update(nextDraft.costId, {
+              energy_kwh: estimatedKwh,
+              energy_source: 'estimated',
+              price_pence: Math.round(Number(nextDraft.price) * 100),
+              price_calculated: nextDraft.priceCalculated,
+              charger_type: nextDraft.type,
+            });
+          } else {
+            const res = await chargerApi.create({
+              session_id: session.id,
+              energy_kwh: estimatedKwh,
+              energy_source: 'estimated',
+              price_pence: Math.round(Number(nextDraft.price) * 100),
+              price_calculated: nextDraft.priceCalculated,
+              charger_type: nextDraft.type,
+            });
+            setCostDrafts((prev) => ({
+              ...prev,
+              [session.id]: { ...prev[session.id], costId: res.data.cost.id },
+            }));
+          }
+        }),
+      );
+      void loadData();
+    } catch {
+      setFormError('Could not save one or more kWh estimates. Please try again.');
+      void loadData();
+    } finally {
+      setEnumerating(false);
+    }
   }
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-green-900 mb-6">Add Charging Session</h1>
+
+      {tariffs.length === 0 && <TariffSetupPrompt />}
 
       {/* ── Vehicle selector ─────────────────────────────────────────────── */}
       {vehicles.length === 0 ? (
@@ -677,7 +922,7 @@ export default function DataEntry() {
               <button
                 type="button"
                 onClick={() => void autoEnumerateCosts()}
-                disabled={enumerating || !tariffRef.current}
+                disabled={enumerating || tariffs.length === 0}
                 className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-50 transition-colors whitespace-nowrap"
                 title="Calculate and save home charge costs for all rows currently showing £0.00"
               >
@@ -687,7 +932,7 @@ export default function DataEntry() {
           )}
         </div>
         <p className="text-xs text-gray-400 mb-4">
-          Charger cost columns stay blank until you choose Home or Away, enter kWh and cost, then save them manually.
+          Changes save automatically. The latest changed row can be reverted until you edit another row.
         </p>
 
         {sessions.length === 0 ? (
@@ -707,70 +952,86 @@ export default function DataEntry() {
                   <th className="pb-2 pr-2 border-l border-green-100 pl-3">Type</th>
                   <th className="pb-2 pr-2" aria-label="Energy (kWh)">kWh</th>
                   <th className="pb-2 pr-2" aria-label="Cost (£)">£</th>
-                  <th className="pb-2 w-16" aria-label="Actions"></th>
+                  <th className="pb-2 w-24" aria-label="Actions"></th>
                 </tr>
               </thead>
               <tbody>
                 {sessions.map((s) => {
                   const draft = costDrafts[s.id];
-                  const edit = sessionEdits[s.id] ?? {};
                   const isSaving = savingId === s.id;
+                  const canRevert = lastRevert?.sessionId === s.id;
+                  const isPendingDelete = canRevert && lastRevert?.kind === 'delete';
+                  const hasCalculatedValues = draft?.isEstimate || draft?.priceCalculated;
                   return (
-                    <tr key={s.id} className="border-b border-gray-50 hover:bg-green-50 align-middle">
+                    <tr
+                      key={s.id}
+                      className={`border-b border-gray-50 align-middle ${
+                        isPendingDelete
+                          ? 'bg-gray-50 text-gray-400 opacity-70'
+                          : `hover:bg-green-50 ${hasCalculatedValues ? 'bg-green-50/40' : ''}`
+                      }`}
+                    >
                       {/* ── Session field cells (all editable) ── */}
                       <td className="py-2 pr-3">
                         <input
                           type="date"
-                          value={edit.date_unplugged ?? s.date_unplugged}
-                          onChange={(e) => patchSessionEdit(s.id, { date_unplugged: e.target.value })}
+                          value={s.date_unplugged}
+                          disabled={isPendingDelete}
+                          onChange={(e) => void patchSessionEdit(s.id, { date_unplugged: e.target.value })}
                           className={rowInputClass}
                         />
                       </td>
                       <td className="py-2 pr-3">
                         <input
                           type="number" step="0.1" min="0" max="999999"
-                          value={edit.odometer_miles ?? s.odometer_miles}
-                          onChange={(e) => patchSessionEdit(s.id, { odometer_miles: Number(e.target.value) })}
+                          value={s.odometer_miles}
+                          disabled={isPendingDelete}
+                          onChange={(e) => void patchSessionEdit(s.id, { odometer_miles: Number(e.target.value) })}
                           className={`${rowInputClass} w-[89px]`}
                         />
                       </td>
                       <td className="py-2 pr-1">
                         <input
                           type="number" min="0" max="100" step="1"
-                          value={edit.initial_battery_pct ?? s.initial_battery_pct}
-                          onChange={(e) => patchSessionEdit(s.id, { initial_battery_pct: Number(e.target.value) })}
+                          value={s.initial_battery_pct}
+                          disabled={isPendingDelete}
+                          onChange={(e) => void patchSessionEdit(s.id, { initial_battery_pct: Number(e.target.value) })}
                           className={`${rowInputClass} w-[49px]`}
                         />
                       </td>
                       <td className="py-2 pr-1">
                         <input
                           type="number" step="0.1" min="0" max="1000"
-                          value={edit.initial_range_miles ?? s.initial_range_miles}
-                          onChange={(e) => patchSessionEdit(s.id, { initial_range_miles: Number(e.target.value) })}
+                          value={s.initial_range_miles}
+                          disabled={isPendingDelete}
+                          onChange={(e) => void patchSessionEdit(s.id, { initial_range_miles: Number(e.target.value) })}
                           className={`${rowInputClass} w-[57px]`}
                         />
                       </td>
                       <td className="py-2 pr-1">
                         <input
                           type="number" min="0" max="100" step="1"
-                          value={edit.final_battery_pct ?? s.final_battery_pct}
-                          onChange={(e) => patchSessionEdit(s.id, { final_battery_pct: Number(e.target.value) })}
+                          value={s.final_battery_pct}
+                          disabled={isPendingDelete}
+                          onChange={(e) => void patchSessionEdit(s.id, { final_battery_pct: Number(e.target.value) })}
                           className={`${rowInputClass} w-[49px]`}
                         />
                       </td>
                       <td className="py-2 pr-1">
                         <input
                           type="number" step="0.1" min="0" max="1000"
-                          value={edit.final_range_miles ?? s.final_range_miles}
-                          onChange={(e) => patchSessionEdit(s.id, { final_range_miles: Number(e.target.value) })}
+                          value={s.final_range_miles}
+                          disabled={isPendingDelete}
+                          onChange={(e) => void patchSessionEdit(s.id, { final_range_miles: Number(e.target.value) })}
                           className={`${rowInputClass} w-[57px]`}
                         />
                       </td>
                       <td className="py-2 pr-1">
                         <input
                           type="number" step="0.1" min="-60" max="60"
-                          value={edit.air_temp_celsius ?? s.air_temp_celsius}
-                          onChange={(e) => patchSessionEdit(s.id, { air_temp_celsius: Number(e.target.value) })}
+                          value={s.air_temp_celsius}
+                          disabled={isPendingDelete}
+                          onChange={(e) => void patchSessionEdit(s.id, { air_temp_celsius: Number(e.target.value) })}
                           className={`${rowInputClass} w-[49px]`}
                         />
                       </td>
@@ -779,7 +1040,8 @@ export default function DataEntry() {
                       <td className="py-2 pr-2 border-l border-green-100 pl-3">
                         <select
                           value={draft?.type ?? ''}
-                          onChange={(e) => patchDraft(s.id, { type: e.target.value as '' | 'home' | 'public' })}
+                          disabled={isPendingDelete}
+                          onChange={(e) => void patchDraft(s.id, { type: e.target.value as '' | 'home' | 'public' })}
                           className="border border-gray-200 rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-500"
                         >
                           <option value="">—</option>
@@ -791,36 +1053,42 @@ export default function DataEntry() {
                         <input
                           type="number" step="0.01" min="0" max="200"
                           value={draft?.kwh ?? ''}
-                          onChange={(e) => patchDraft(s.id, { kwh: e.target.value, energySource: 'measured', isEstimate: false })}
-                          className={`w-20 border rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-500 ${draft?.isEstimate ? 'border-dashed border-gray-300 text-gray-400 italic' : 'border-gray-200'}`}
+                          disabled={isPendingDelete}
+                          onChange={(e) => void patchDraft(s.id, { kwh: e.target.value, energySource: 'measured', isEstimate: false })}
+                          className={`w-20 border rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-500 ${draft?.isEstimate ? calculatedInputClass : 'border-gray-200'}`}
                         />
                       </td>
                       <td className="py-2 pr-2">
                         <input
                           type="number" step="0.01" min="0" max="10000"
                           value={draft?.price ?? ''}
-                          onChange={(e) => patchDraft(s.id, { price: e.target.value })}
-                          className={`w-20 border rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-500 ${draft?.isEstimate ? 'border-dashed border-gray-300 text-gray-400 italic' : 'border-gray-200'}`}
+                          disabled={isPendingDelete}
+                          onChange={(e) => void patchDraft(s.id, { price: e.target.value, priceCalculated: false })}
+                          className={`w-20 border rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-500 ${draft?.priceCalculated ? calculatedInputClass : 'border-gray-200'}`}
                         />
                       </td>
                       <td className="py-2 pl-1">
-                        <button
-                          onClick={() => saveRow(s.id)}
-                          disabled={isSaving}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-full text-green-600 hover:bg-green-100 hover:text-green-800 disabled:opacity-50"
-                          aria-label="Save row"
-                          title="Save"
-                        >
-                          {isSaving ? '…' : '✓'}
-                        </button>
-                        <button
-                          onClick={() => deleteSession(s.id)}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-full text-red-500 hover:bg-red-100 hover:text-red-700"
-                          aria-label="Delete row"
-                          title="Delete"
-                        >
-                          ×
-                        </button>
+                        {canRevert && (
+                          <button
+                            onClick={() => void revertLastRowChange()}
+                            disabled={isSaving}
+                            className="inline-flex h-7 items-center justify-center rounded-full px-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 hover:text-amber-900 disabled:opacity-50 whitespace-nowrap"
+                            aria-label="Revert last row change"
+                            title="Revert last change"
+                          >
+                            {isSaving ? '…' : 'Revert'}
+                          </button>
+                        )}
+                        {!canRevert && (
+                          <button
+                            onClick={() => void deleteSession(s.id)}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-red-500 hover:bg-red-100 hover:text-red-700"
+                            aria-label="Delete row"
+                            title="Delete"
+                          >
+                            ×
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -832,8 +1100,9 @@ export default function DataEntry() {
                     Total cost
                   </td>
                   <td colSpan={3} className="pt-2 pb-1 pr-2 border-t border-green-100 text-right">
-                    £{Object.values(costDrafts)
-                      .reduce((sum, d) => sum + (Number(d.price) || 0), 0)
+                    £{Object.entries(costDrafts)
+                      .filter(([sessionId]) => Number(sessionId) !== (lastRevert?.kind === 'delete' ? lastRevert.sessionId : -1))
+                      .reduce((sum, [, d]) => sum + (Number(d.price) || 0), 0)
                       .toFixed(2)}
                   </td>
                 </tr>
@@ -853,7 +1122,7 @@ export default function DataEntry() {
             <div className="flex justify-end gap-3">
               <button
                 type="button"
-                onClick={() => estimateKwhInputs()}
+                onClick={() => void estimateKwhInputs()}
                 className="bg-green-700 hover:bg-green-600 text-white font-semibold px-4 py-2 rounded-lg text-sm"
               >
                 OK
@@ -878,6 +1147,9 @@ const inputClass =
 
 const rowInputClass =
   'w-28 border border-gray-200 rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-500';
+
+const calculatedInputClass =
+  'border-green-200 bg-green-50 text-green-900';
 
 function CsvStat({ label, value, tone = 'normal' }: { label: string; value: string; tone?: 'normal' | 'error' }) {
   return (

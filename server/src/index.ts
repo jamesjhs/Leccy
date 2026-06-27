@@ -18,6 +18,8 @@ import analyticsRoutes from './routes/analytics';
 import adminRoutes from './routes/admin';
 import vehiclesRoutes from './routes/vehicles';
 import publicRoutes from './routes/public';
+import pushRoutes from './routes/push';
+import { startChargeReminderScheduler } from './services/chargeReminderScheduler';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '2030', 10);
@@ -61,7 +63,7 @@ app.use(
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind uses inline styles
         imgSrc: ["'self'", 'data:'],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", 'https://*.push.apple.com', 'https://*.push.services.mozilla.com', 'https://*.googleapis.com', 'https://*.gvt1.com'],
         fontSrc: ["'self'"],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
@@ -134,6 +136,7 @@ app.use('/api/tariff', apiLimiter, tariffRoutes);
 app.use('/api/analytics', apiLimiter, analyticsRoutes);
 app.use('/api/admin', apiLimiter, adminRoutes);
 app.use('/api/vehicles', apiLimiter, vehiclesRoutes);
+app.use('/api/push', apiLimiter, pushRoutes);
 
 // ─── Serve frontend in production ─────────────────────────────────────────────
 if (IS_PROD) {
@@ -155,6 +158,7 @@ if (IS_PROD) {
 
 app.listen(PORT, () => {
   console.log(`[server] Leccy running on port ${PORT} (${process.env.NODE_ENV || 'development'})`);
+  startChargeReminderScheduler();
 });
 
 export default app;

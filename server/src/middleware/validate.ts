@@ -169,6 +169,7 @@ export const chargerCostSchema = z.object({
     .positive('Must be greater than zero')
     .max(200, 'Energy exceeds expected maximum'),
   price_pence: pence(10_000),
+  price_calculated: z.boolean().optional().default(false),
   charger_type: z.enum(['home', 'public']),
   energy_source: z.enum(['measured', 'estimated']).optional().default('measured'),
   charger_name: z
@@ -187,6 +188,7 @@ export const chargerCostUpdateSchema = z.object({
     .max(200, 'Energy exceeds expected maximum')
     .optional(),
   price_pence: pence(10_000).optional(),
+  price_calculated: z.boolean().optional(),
   charger_type: z.enum(['home', 'public']).optional(),
   energy_source: z.enum(['measured', 'estimated']).optional(),
 });
@@ -271,6 +273,7 @@ export const createVehicleSchema = z.object({
   nickname: z.string().max(100).transform((s) => s.trim()).optional(),
   vehicle_type: z.string().max(100).transform((s) => s.trim()).optional(),
   battery_kwh: nnReal(500).optional().nullable(),
+  apply_existing_data: z.boolean().optional().default(false),
 });
 
 /** PUT /vehicles/:id */

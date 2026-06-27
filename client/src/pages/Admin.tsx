@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { adminApi, UserInfo, AppSetting, NewUser } from '../utils/api';
+import { adminApi, UserInfo, AppSetting, NewUser, VapidSettings } from '../utils/api';
 
 interface UserForm {
   email: string;
@@ -18,12 +18,21 @@ interface SmtpForm {
   SMTP_FROM: string;
 }
 
+interface VapidForm {
+  publicKey: string;
+  privateKey: string;
+  subject: string;
+}
+
 export default function Admin() {
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [settings, setSettings] = useState<AppSetting[]>([]);
+  const [vapidSettings, setVapidSettings] = useState<VapidSettings | null>(null);
   const [userSuccess, setUserSuccess] = useState<string | null>(null);
   const [userError, setUserError] = useState<string | null>(null);
   const [smtpSuccess, setSmtpSuccess] = useState<string | null>(null);
+  const [vapidSuccess, setVapidSuccess] = useState<string | null>(null);
+  const [vapidError, setVapidError] = useState<string | null>(null);
 
   const {
     register: registerUser,
@@ -39,16 +48,34 @@ export default function Admin() {
     formState: { isSubmitting: smtpSubmitting },
   } = useForm<SmtpForm>();
 
+  const {
+    register: registerVapid,
+    handleSubmit: handleVapidSubmit,
+    setValue: setVapidValue,
+    reset: resetVapid,
+    formState: { isSubmitting: vapidSubmitting },
+  } = useForm<VapidForm>();
+
   async function load() {
     try {
-      const [usersRes, settingsRes] = await Promise.all([adminApi.getUsers(), adminApi.getSettings()]);
+      const [usersRes, settingsRes, vapidRes] = await Promise.all([
+        adminApi.getUsers(),
+        adminApi.getSettings(),
+        adminApi.getVapidSettings(),
+      ]);
       setUsers(usersRes.data.users);
       setSettings(settingsRes.data.settings);
+      setVapidSettings(vapidRes.data);
       for (const s of settingsRes.data.settings) {
         if (['SMTP_HOST', 'SMTP_PORT', 'SMTP_SECURE', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM'].includes(s.key)) {
           setSmtpValue(s.key as keyof SmtpForm, s.value);
         }
       }
+      resetVapid({
+        publicKey: vapidRes.data.publicKey,
+        privateKey: '',
+        subject: vapidRes.data.subject || 'mailto:admin@localhost',
+      });
     } catch {/* ignore */}
   }
 
@@ -88,6 +115,43 @@ export default function Admin() {
       await adminApi.updateSettings(data as unknown as Record<string, string>);
       setSmtpSuccess('SMTP settings saved!');
     } catch {/* ignore */}
+  }
+
+  async function onSaveVapid(data: VapidForm) {
+    setVapidSuccess(null);
+    setVapidError(null);
+    try {
+      await adminApi.updateVapidSettings({
+        publicKey: data.publicKey,
+        privateKey: data.privateKey,
+        subject: data.subject,
+      });
+      setVapidSuccess('VAPID settings saved!');
+      const refreshed = await adminApi.getVapidSettings();
+      setVapidSettings(refreshed.data);
+      resetVapid({
+        publicKey: refreshed.data.publicKey,
+        privateKey: '',
+        subject: refreshed.data.subject || 'mailto:admin@localhost',
+      });
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to save VAPID settings';
+      setVapidError(msg);
+    }
+  }
+
+  async function generateVapidKeys() {
+    if (!confirm('Generate a new VAPID key pair? Saving new keys will require users to re-enable push notifications.')) return;
+    setVapidSuccess(null);
+    setVapidError(null);
+    try {
+      const res = await adminApi.generateVapidKeys();
+      setVapidValue('publicKey', res.data.publicKey);
+      setVapidValue('privateKey', res.data.privateKey);
+      setVapidSuccess('New VAPID keys generated. Save VAPID Settings to apply them.');
+    } catch {
+      setVapidError('Failed to generate VAPID keys');
+    }
   }
 
   const getSettingValue = (key: string) => settings.find((s) => s.key === key)?.value ?? '';
@@ -230,6 +294,72 @@ export default function Admin() {
           >
             {smtpSubmitting ? 'Saving…' : 'Save SMTP Settings'}
           </button>
+        </form>
+      </section>
+
+      {/* VAPID Settings */}
+      <section className="bg-white rounded-xl shadow-sm border border-green-100 p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+          <div>
+            <h2 className="text-lg font-bold text-green-900">Web Push (VAPID)</h2>
+            <p className="text-sm text-gray-500 mt-1">Configure browser push keys for PWA charge reminders.</p>
+          </div>
+          <span
+            className={`self-start sm:self-auto px-3 py-1 rounded-full text-xs font-semibold ${
+              vapidSettings?.configured ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+            }`}
+          >
+            {vapidSettings?.configured ? 'Configured' : 'Not configured'}
+          </span>
+        </div>
+
+        {vapidSuccess && <div className="bg-green-50 border border-green-300 text-green-700 rounded-lg px-4 py-3 mb-4 text-sm">{vapidSuccess}</div>}
+        {vapidError && <div className="bg-red-50 border border-red-300 text-red-700 rounded-lg px-4 py-3 mb-4 text-sm">{vapidError}</div>}
+
+        <form onSubmit={handleVapidSubmit(onSaveVapid)} className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Public Key</label>
+            <input type="text" className={inputClass} autoComplete="off" placeholder="VAPID public key" {...registerVapid('publicKey')} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Private Key</label>
+            <input
+              type="password"
+              className={inputClass}
+              autoComplete="off"
+              placeholder="Leave blank to keep current"
+              {...registerVapid('privateKey')}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              {vapidSettings?.privateKeyConfigured ? 'Private key is configured and hidden.' : 'No private key is configured.'}
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Subject</label>
+            <input
+              type="text"
+              className={inputClass}
+              autoComplete="off"
+              placeholder="mailto:admin@example.com or https://example.com"
+              {...registerVapid('subject')}
+            />
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              type="submit"
+              disabled={vapidSubmitting}
+              className="bg-green-700 hover:bg-green-600 disabled:bg-green-400 text-white font-bold px-5 py-2 rounded-lg text-sm transition-colors"
+            >
+              {vapidSubmitting ? 'Saving…' : 'Save VAPID Settings'}
+            </button>
+            <button
+              type="button"
+              onClick={generateVapidKeys}
+              className="border border-green-200 text-green-700 hover:bg-green-50 font-bold px-5 py-2 rounded-lg text-sm transition-colors"
+            >
+              Generate Key Pair
+            </button>
+          </div>
         </form>
       </section>
     </div>

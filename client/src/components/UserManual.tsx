@@ -18,7 +18,7 @@ export default function UserManual({ onClose }: UserManualProps) {
         </div>
 
         <div className="overflow-y-auto px-6 py-4 text-sm text-gray-700 space-y-5">
-          <p className="text-xs text-gray-500">Leccy v1.4.0 · EV Cost Tracker</p>
+          <p className="text-xs text-gray-500">Leccy v1.6.0 · EV Cost Tracker</p>
 
           {/* ── Getting started ── */}
           <section>
@@ -52,6 +52,7 @@ export default function UserManual({ onClose }: UserManualProps) {
             <ul className="list-disc pl-5 space-y-1">
               <li>Enter your <strong>licence plate</strong> (spaces are stripped automatically).</li>
               <li>Optionally add a <strong>nickname</strong> (e.g. "Daily Driver") and the vehicle's <strong>battery capacity in kWh</strong>.</li>
+              <li>When adding your first vehicle, you can apply existing unlinked charging and maintenance data to it.</li>
               <li>You can register multiple vehicles and switch between them when logging sessions.</li>
               <li>To remove a vehicle, click <em>Remove</em> beside it. Any sessions linked to that vehicle are kept but will no longer show a vehicle name.</li>
             </ul>
@@ -66,6 +67,8 @@ export default function UserManual({ onClose }: UserManualProps) {
             </p>
             <ul className="list-disc pl-5 space-y-1">
               <li><strong>Quick Entry:</strong> save charge-start odometer, battery percentage, and displayed range, then finish the session after unplugging.</li>
+              <li><strong>Charge reminders:</strong> when Leccy is installed as a PWA and push notifications are enabled, a saved Quick Entry charge start can trigger a daily reminder until you submit or clear it.</li>
+              <li><strong>Quick Entry sense checks:</strong> Leccy highlights impossible end-charge SOC, range, temperature, and date combinations before estimating kWh or submitting.</li>
               <li><strong>CSV Data Entry:</strong> paste rows in the format <code>odo,init%,initRng,Final%,FinalRng,AirTemp,dd/mm/yyyy</code>.</li>
               <li><strong>Test before submit:</strong> the <em>Test</em> button validates rows, highlights errors, and shows basic statistics before import.</li>
               <li><strong>Imported sessions:</strong> CSV imports create charging sessions only. Charge type, kWh, and cost are left blank so you can enter the measured charger data yourself.</li>
@@ -85,7 +88,8 @@ export default function UserManual({ onClose }: UserManualProps) {
               <li><strong>Cost (pence):</strong> the total amount paid in pence (e.g. 1200 = £12.00).</li>
               <li><strong>Estimate kWh:</strong> this optional button estimates kWh from SOC gained × vehicle battery size, after warning that it will affect charge-efficiency calculations.</li>
               <li><strong>Measured vs estimated:</strong> Leccy records whether kWh came from the charger or from an estimate, and uses that in analytics and data-quality checks.</li>
-              <li><strong>Save or delete:</strong> use the green tick to save row edits, or the red X to delete a record.</li>
+              <li><strong>Autosave and revert:</strong> Charging Sessions table edits save automatically. The latest edited row can be reverted until you edit another row.</li>
+              <li><strong>Delete with undo:</strong> deleting a session greys the row and offers Revert while it remains the latest changed row.</li>
             </ul>
           </section>
 
@@ -105,6 +109,7 @@ export default function UserManual({ onClose }: UserManualProps) {
               <li><strong>Effective from:</strong> the date this tariff started.</li>
             </ul>
             <p className="mt-2">You can store multiple tariffs with different effective dates to track rate changes over time.</p>
+            <p className="mt-2">When Data Entry auto-enumerates home costs, it uses the tariff active on each session date.</p>
           </section>
 
           {/* ── Maintenance ── */}
@@ -131,7 +136,7 @@ export default function UserManual({ onClose }: UserManualProps) {
               <li><strong>Temperature vs range:</strong> shows how cold weather affects your EV's range.</li>
               <li><strong>Miles per % battery:</strong> tracks how many miles you get from each percentage point of charge.</li>
             </ul>
-            <p className="mt-2 mb-1 font-semibold text-green-700">Advanced analytics (v1.4.0)</p>
+            <p className="mt-2 mb-1 font-semibold text-green-700">Advanced analytics</p>
             <ul className="list-disc pl-5 space-y-1">
               <li>
                 <strong>Ownership Intelligence:</strong> compares your EV spend with a typical petrol-car
@@ -178,6 +183,7 @@ export default function UserManual({ onClose }: UserManualProps) {
             <p className="mt-2">
               Use the <strong>date range filter</strong> at the top of the page to focus on a
               specific period, and the <strong>vehicle filter</strong> to view data for a single car.
+              If tariff or vehicle setup is missing, Analytics links you directly to the relevant setup page.
             </p>
           </section>
 
@@ -188,13 +194,24 @@ export default function UserManual({ onClose }: UserManualProps) {
               <li><strong>Change password:</strong> enter your current password, then your new password (min 8 chars + 1 special character), and confirm it.</li>
               <li><strong>Enable 2FA:</strong> click <em>Enable 2FA</em>, confirm your email address, then enter the 6-digit code sent to you.</li>
               <li><strong>Disable 2FA:</strong> enter your password to turn off two-factor authentication.</li>
+              <li><strong>Charge Reminder Notifications:</strong> enable or disable PWA push reminders and choose the daily reminder time. The default is 07:30.</li>
               <li><strong>My Vehicles:</strong> add or remove vehicles associated with your account.</li>
+            </ul>
+          </section>
+
+          {/* ── Admin panel ── */}
+          <section>
+            <h3 className="font-semibold text-green-700 mb-2">9. Admin panel</h3>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><strong>User Management:</strong> administrators can create and remove users.</li>
+              <li><strong>SMTP Settings:</strong> configure outgoing email used for magic links and two-factor codes.</li>
+              <li><strong>Web Push (VAPID):</strong> configure PWA push notification keys, generate a new key pair, and check whether the private key is configured.</li>
             </ul>
           </section>
 
           {/* ── Data &amp; privacy ── */}
           <section>
-            <h3 className="font-semibold text-green-700 mb-2">9. Your data &amp; privacy</h3>
+            <h3 className="font-semibold text-green-700 mb-2">10. Your data &amp; privacy</h3>
             <ul className="list-disc pl-5 space-y-1">
               <li>
                 <strong>All data is stored on the server</strong> that hosts this application — no
@@ -223,7 +240,7 @@ export default function UserManual({ onClose }: UserManualProps) {
 
           {/* ── Tips ── */}
           <section>
-            <h3 className="font-semibold text-green-700 mb-2">10. Tips &amp; troubleshooting</h3>
+            <h3 className="font-semibold text-green-700 mb-2">11. Tips &amp; troubleshooting</h3>
             <ul className="list-disc pl-5 space-y-1">
               <li>If you are locked out after too many failed login attempts, wait 15 minutes or use a <em>Magic Link</em> to sign in without a password.</li>
               <li>Magic links expire after 15 minutes and can only be used once.</li>

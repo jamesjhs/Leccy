@@ -7,6 +7,7 @@ interface VehicleForm {
   nickname?: string;
   vehicle_type?: string;
   battery_kwh?: string;
+  apply_existing_data?: boolean;
 }
 
 const VEHICLE_TYPES = [
@@ -40,6 +41,8 @@ export default function Vehicles() {
     setValue,
     formState: { errors },
   } = useForm<VehicleForm>();
+
+  const isAddingFirstVehicle = editingId === null && vehicles.length === 0;
 
   async function load() {
     try {
@@ -80,6 +83,7 @@ export default function Vehicles() {
         battery_kwh: data.battery_kwh !== '' && data.battery_kwh !== undefined
           ? (isFinite(Number(data.battery_kwh)) ? Number(data.battery_kwh) : null)
           : null,
+        apply_existing_data: isAddingFirstVehicle ? data.apply_existing_data === true : undefined,
       };
 
       if (editingId !== null) {
@@ -87,7 +91,7 @@ export default function Vehicles() {
         setSuccess('Vehicle updated!');
       } else {
         await vehiclesApi.create(payload);
-        setSuccess('Vehicle added!');
+        setSuccess(data.apply_existing_data ? 'Vehicle added and existing data assigned!' : 'Vehicle added!');
       }
 
       reset();
@@ -209,6 +213,22 @@ export default function Vehicles() {
               )}
             </div>
           </div>
+
+          {isAddingFirstVehicle && (
+            <label className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-amber-300 text-green-700 focus:ring-green-500"
+                {...register('apply_existing_data')}
+              />
+              <span>
+                <span className="font-semibold">Apply all current data to this vehicle</span>
+                <span className="block text-xs mt-1">
+                  Existing charging sessions and maintenance entries without a vehicle link will be assigned to this first vehicle.
+                </span>
+              </span>
+            </label>
+          )}
 
           <div className="flex gap-3">
             <button

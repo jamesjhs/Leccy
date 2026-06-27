@@ -4,7 +4,9 @@ import {
   BatteryHealthChart, ThermalImpactChart, GOMAccuracyChart,
   RangeAnxietyChart, ChargingHabitsChart,
 } from '../charts';
-import { analyticsApi, vehiclesApi, AnalyticsResult, Vehicle } from '../utils/api';
+import TariffSetupPrompt from '../components/TariffSetupPrompt';
+import VehicleSetupPrompt from '../components/VehicleSetupPrompt';
+import { analyticsApi, tariffApi, vehiclesApi, AnalyticsResult, TariffConfig, Vehicle } from '../utils/api';
 
 type Period = 'week' | 'month' | 'all' | 'custom';
 type ChargeTypeFilter = 'all' | 'home' | 'public';
@@ -62,19 +64,24 @@ export default function Analytics() {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [tariffs, setTariffs] = useState<TariffConfig[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [data, setData] = useState<AnalyticsResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [chargeTypeFilter, setChargeTypeFilter] = useState<ChargeTypeFilter>('all');
 
   useEffect(() => {
-    async function loadVehicles() {
+    async function loadSetupData() {
       try {
-        const res = await vehiclesApi.getAll();
-        setVehicles(res.data.vehicles);
+        const [vehicleRes, tariffRes] = await Promise.all([
+          vehiclesApi.getAll(),
+          tariffApi.getAll(),
+        ]);
+        setVehicles(vehicleRes.data.vehicles);
+        setTariffs(tariffRes.data.tariffs);
       } catch {/* ignore */}
     }
-    void loadVehicles();
+    void loadSetupData();
   }, []);
 
   async function load() {
@@ -128,6 +135,9 @@ export default function Analytics() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-green-900 mb-6">Analytics</h1>
+
+      {tariffs.length === 0 && <TariffSetupPrompt />}
+      {vehicles.length === 0 && <VehicleSetupPrompt />}
 
       {/* Vehicle selector */}
       {vehicles.length > 0 && (

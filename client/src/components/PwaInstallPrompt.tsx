@@ -68,7 +68,7 @@ export default function PwaInstallPrompt() {
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-bold text-green-900">Install Leccy</h2>
             <p className="text-xs text-gray-500 mt-1">
-              Add Leccy to your device for quicker charge logging.
+              Add Leccy to your device for quicker charge logging and charge reminder notifications.
             </p>
             <div className="flex gap-2 mt-3">
               <button

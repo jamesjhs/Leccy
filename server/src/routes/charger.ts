@@ -29,7 +29,7 @@ router.get('/', (req: Request, res: Response): void => {
 router.post('/', validate(chargerCostSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const { session_id, energy_kwh, energy_source, price_pence, charger_type, charger_name } =
+    const { session_id, energy_kwh, energy_source, price_pence, price_calculated, charger_type, charger_name } =
       req.body as ChargerCost & { session_id: number };
 
     // Verify session belongs to user
@@ -44,8 +44,8 @@ router.post('/', validate(chargerCostSchema), (req: Request, res: Response): voi
 
     const result = db
       .prepare(
-        `INSERT INTO charger_costs (session_id, user_id, energy_kwh, energy_source, price_pence, charger_type, charger_name)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO charger_costs (session_id, user_id, energy_kwh, energy_source, price_pence, price_calculated, charger_type, charger_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         session_id,
@@ -53,6 +53,7 @@ router.post('/', validate(chargerCostSchema), (req: Request, res: Response): voi
         energy_kwh,
         energy_source ?? 'measured',
         price_pence,
+        price_calculated ? 1 : 0,
         charger_type,
         charger_name ?? null
       );
@@ -92,16 +93,24 @@ router.put('/:id', validate(chargerCostUpdateSchema), (req: Request, res: Respon
       return;
     }
 
-    const { energy_kwh, energy_source, price_pence, charger_type } = req.body as Partial<ChargerCost>;
+    const { energy_kwh, energy_source, price_pence, price_calculated, charger_type } = req.body as Partial<ChargerCost>;
 
     db.prepare(
       `UPDATE charger_costs SET
          energy_kwh = COALESCE(?, energy_kwh),
          energy_source = COALESCE(?, energy_source),
          price_pence = COALESCE(?, price_pence),
+         price_calculated = COALESCE(?, price_calculated),
          charger_type = COALESCE(?, charger_type)
        WHERE id = ?`
-    ).run(energy_kwh ?? null, energy_source ?? null, price_pence ?? null, charger_type ?? null, costId);
+    ).run(
+      energy_kwh ?? null,
+      energy_source ?? null,
+      price_pence ?? null,
+      price_calculated === undefined ? null : price_calculated ? 1 : 0,
+      charger_type ?? null,
+      costId,
+    );
 
     const updated = db
       .prepare(`SELECT * FROM charger_costs WHERE id = ?`)

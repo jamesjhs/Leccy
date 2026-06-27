@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useAuthContext } from '../App';
-import { authApi, vehiclesApi, Vehicle } from '../utils/api';
+import { authApi, pushApi, vehiclesApi, PushSettings, Vehicle } from '../utils/api';
+import { browserSupportsPush, disablePushNotifications, enablePushNotifications, isStandalonePwa } from '../utils/pushNotifications';
 
 interface ChangePasswordForm {
   current_password: string;
@@ -49,6 +50,12 @@ export default function AccountSettings() {
   const [twoFAMsg, setTwoFAMsg] = useState<string | null>(null);
   const [twoFAError, setTwoFAError] = useState<string | null>(null);
   const [disableMsg, setDisableMsg] = useState<string | null>(null);
+
+  // Push reminder state
+  const [pushSettings, setPushSettings] = useState<PushSettings | null>(null);
+  const [pushMsg, setPushMsg] = useState<string | null>(null);
+  const [pushError, setPushError] = useState<string | null>(null);
+  const [pushSubmitting, setPushSubmitting] = useState(false);
 
   // Vehicles state
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -112,6 +119,12 @@ export default function AccountSettings() {
       ]);
       setTwoFAEnabled(statusRes.data.enabled);
       setVehicles(vehiclesRes.data.vehicles);
+      try {
+        const pushRes = await pushApi.getSettings();
+        setPushSettings(pushRes.data);
+      } catch {
+        setPushSettings(null);
+      }
     } catch {/* ignore */}
   }
 
@@ -170,6 +183,53 @@ export default function AccountSettings() {
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to disable 2FA.';
       setTwoFAError(msg);
+    }
+  }
+
+  async function enablePush() {
+    setPushMsg(null);
+    setPushError(null);
+    setPushSubmitting(true);
+    try {
+      await enablePushNotifications();
+      const settings = await pushApi.getSettings();
+      setPushSettings(settings.data);
+      setPushMsg('Push reminders enabled.');
+    } catch (err: unknown) {
+      setPushError(err instanceof Error ? err.message : 'Failed to enable push reminders.');
+    } finally {
+      setPushSubmitting(false);
+    }
+  }
+
+  async function disablePush() {
+    setPushMsg(null);
+    setPushError(null);
+    setPushSubmitting(true);
+    try {
+      await disablePushNotifications();
+      const settings = await pushApi.getSettings();
+      setPushSettings(settings.data);
+      setPushMsg('Push reminders disabled.');
+    } catch (err: unknown) {
+      setPushError(err instanceof Error ? err.message : 'Failed to disable push reminders.');
+    } finally {
+      setPushSubmitting(false);
+    }
+  }
+
+  async function updatePushTime(reminderTime: string) {
+    setPushMsg(null);
+    setPushError(null);
+    try {
+      const res = await pushApi.updateSettings({
+        reminder_time: reminderTime,
+        time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      setPushSettings(res.data);
+      setPushMsg('Reminder time updated.');
+    } catch {
+      setPushError('Failed to update reminder time.');
     }
   }
 
@@ -388,6 +448,66 @@ export default function AccountSettings() {
           </form>
         )}
         {disableErrors.password && <p className="text-red-500 text-xs mt-1">{disableErrors.password.message}</p>}
+      </section>
+
+      {/* Push Notifications */}
+      <section className="bg-white rounded-xl shadow-sm border border-green-100 p-6">
+        <h2 className="text-lg font-bold text-green-900 mb-2">Charge Reminder Notifications</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          When a Quick Entry charge is in progress, Leccy can send a daily PWA push reminder until you submit or clear it.
+        </p>
+
+        {pushMsg && <div className="bg-green-50 border border-green-300 text-green-700 rounded-lg px-4 py-3 mb-4 text-sm">{pushMsg}</div>}
+        {pushError && <div className="bg-red-50 border border-red-300 text-red-700 rounded-lg px-4 py-3 mb-4 text-sm">{pushError}</div>}
+
+        {!browserSupportsPush() ? (
+          <p className="text-sm text-gray-400">This browser does not support PWA push notifications.</p>
+        ) : pushSettings && !pushSettings.configured ? (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+            Push notifications are not configured on this server. Add VAPID keys to enable this feature.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {!isStandalonePwa() && (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                Install Leccy as a PWA to receive charge reminders reliably on this device.
+              </p>
+            )}
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Reminder time</label>
+                <input
+                  type="time"
+                  className={inputClass}
+                  value={pushSettings?.reminder_time ?? '07:30'}
+                  onChange={(e) => void updatePushTime(e.target.value)}
+                />
+              </div>
+              {pushSettings?.enabled ? (
+                <button
+                  type="button"
+                  onClick={() => void disablePush()}
+                  disabled={pushSubmitting}
+                  className="bg-white border border-red-300 hover:bg-red-50 disabled:opacity-60 text-red-700 font-bold px-5 py-2 rounded-lg text-sm transition-colors"
+                >
+                  {pushSubmitting ? 'Saving...' : 'Disable Push'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void enablePush()}
+                  disabled={pushSubmitting}
+                  className="bg-green-700 hover:bg-green-600 disabled:bg-green-400 text-white font-bold px-5 py-2 rounded-lg text-sm transition-colors"
+                >
+                  {pushSubmitting ? 'Enabling...' : 'Enable Push'}
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-400">
+              Default reminder time is 07:30. Delivery uses this device's time zone when available.
+            </p>
+          </div>
+        )}
       </section>
 
       {/* Vehicles */}

@@ -545,7 +545,7 @@ Example: £1.23 is stored as `123` pence.
 
 - Reworked Data Entry around CSV paste/import with pre-submit testing, row-level validation, and no automatic charge type, kWh, or cost assumptions.
 - Added measured versus estimated kWh tracking through `charger_costs.energy_source`.
-- Added an Estimate kWh flow based on SOC gained × vehicle battery size, with a warning that estimated values affect charge-efficiency calculations.
+- Added an Estimate kWh flow based on SOC gained × vehicle battery size; it only fills blank kWh entries and leaves existing measured or estimated kWh values unchanged.
 - Split charging-session analytics into separate cost and kWh charts with `All`, `Home`, and `Away` filters.
 - Added advanced analytics for ownership savings, home-versus-away economics, odometer-based efficiency, temperature-normalised efficiency, measured-kWh usable capacity proxy, and data quality.
 - Updated the public homepage to use live aggregate usage and EV-savings data across users, including admin sessions.

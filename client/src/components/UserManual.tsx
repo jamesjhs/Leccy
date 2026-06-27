@@ -86,7 +86,7 @@ export default function UserManual({ onClose }: UserManualProps) {
               <li><strong>Charge type:</strong> choose <em>Home</em> or <em>Away</em> when you know where the session happened.</li>
               <li><strong>Energy (kWh):</strong> enter the charger-reported energy whenever possible.</li>
               <li><strong>Cost (pence):</strong> the total amount paid in pence (e.g. 1200 = £12.00).</li>
-              <li><strong>Estimate kWh:</strong> this optional button estimates kWh from SOC gained × vehicle battery size, after warning that it will affect charge-efficiency calculations.</li>
+              <li><strong>Estimate kWh:</strong> this optional button estimates blank kWh entries from SOC gained × vehicle battery size while leaving existing kWh values unchanged.</li>
               <li><strong>Measured vs estimated:</strong> Leccy records whether kWh came from the charger or from an estimate, and uses that in analytics and data-quality checks.</li>
               <li><strong>Autosave and revert:</strong> Charging Sessions table edits save automatically. The latest edited row can be reverted until you edit another row.</li>
               <li><strong>Delete with undo:</strong> deleting a session greys the row and offers Revert while it remains the latest changed row.</li>

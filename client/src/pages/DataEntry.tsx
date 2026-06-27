@@ -239,6 +239,10 @@ function isPersistableCostDraft(draft: CostDraft): draft is CostDraft & { type: 
   return draft.type !== '' && Number.isFinite(kwh) && kwh > 0 && Number.isFinite(pricePence) && pricePence >= 0;
 }
 
+function hasBlankKwh(draft: CostDraft | undefined): boolean {
+  return (draft?.kwh ?? '').trim() === '';
+}
+
 export default function DataEntry() {
   const [sessions, setSessions] = useState<ChargingSession[]>([]);
   const [costs, setCosts] = useState<ChargerCostWithDate[]>([]);
@@ -684,6 +688,9 @@ export default function DataEntry() {
 
   async function estimateKwhInputs() {
     const updates = sessions.flatMap((s) => {
+      const draft = costDraftsRef.current[s.id];
+      if (!hasBlankKwh(draft)) return [];
+
       const vehicle = vehicles.find((v) => v.id === (s.vehicle_id ?? selectedVehicleId));
       if (!vehicle?.battery_kwh) return [];
 
@@ -1117,7 +1124,7 @@ export default function DataEntry() {
           <div className="bg-white rounded-xl shadow-xl border border-green-100 max-w-sm w-full p-5">
             <h2 className="text-lg font-bold text-green-900 mb-2">Estimate kWh?</h2>
             <p className="text-sm text-gray-600 mb-5">
-              this will affect charge efficiency calculations
+              This will only fill blank kWh entries. Existing kWh values will not be changed.
             </p>
             <div className="flex justify-end gap-3">
               <button

@@ -79,7 +79,7 @@ async function sendPushNotifications(candidate: ReminderCandidate): Promise<bool
     title: 'Leccy charge reminder',
     body: `A charge was started ${startedText}. Enter the end-charge data when you next use the car.`,
     icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-96x96.png',
+    badge: '/icons/icon-androidBar.png',
     url: '/quick-data-entry',
     tag: 'leccy-charge-in-progress',
   });

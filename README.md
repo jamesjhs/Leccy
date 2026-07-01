@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker · v1.6.1
+# Leccy — EV Cost Tracker · v1.6.2
 
 A full-stack web application for logging and analysing the cost of charging an electric vehicle. Installs as a native-feeling app on Android (Chrome) and iOS (Safari), with an in-app install prompt where supported.
 
@@ -37,6 +37,10 @@ npm start
 | [TECHNICAL_MANUAL.md](TECHNICAL_MANUAL.md) | Architecture, API reference, database schema |
 
 ## Version
+
+**1.6.2**
+
+Bugfix release: uses the Android-specific notification badge icon for the Android notification/status bar and refreshes PWA navigation/static assets from the server first after versioned service-worker updates.
 
 **1.6.1**
 

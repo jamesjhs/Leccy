@@ -1,21 +1,30 @@
 /* ============================================================
    Leccy — Service Worker
-   Cache-first for static assets, network-first for /api/
+   Network-first for live assets/APIs, offline fallback from cache
    ============================================================ */
 
-const CACHE_NAME = 'leccy-1.6.1';
+const CACHE_NAME = 'leccy-1.6.2';
 
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
 ];
 
+function freshRequest(request) {
+  return new Request(request, { cache: 'reload' });
+}
+
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache =>
       Promise.allSettled(
         STATIC_ASSETS.map(url =>
-          cache.add(url).catch(err => console.warn('SW: Failed to cache', url, err))
+          fetch(freshRequest(url))
+            .then(response => {
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              return cache.put(url, response);
+            })
+            .catch(err => console.warn('SW: Failed to cache', url, err))
         )
       )
     ).then(() => self.skipWaiting())
@@ -39,6 +48,11 @@ self.addEventListener('message', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
+  if (event.request.method !== 'GET') {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   // Network-first for API calls
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
@@ -52,26 +66,29 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // For SPA navigation requests, always serve the cached root shell ('/').
+  // For SPA navigation requests, load the newest shell first and keep cache as an offline fallback.
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      caches.match('/').then(cached => cached || fetch('/'))
+      fetch(freshRequest(event.request)).then(response => {
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put('/', clone));
+        }
+        return response;
+      }).catch(() => caches.match('/').then(cached => cached || fetch('/')))
     );
     return;
   }
 
-  // Cache-first for static assets
+  // Network-first for static assets so a version bump refreshes local files promptly.
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
-      return fetch(event.request).then(response => {
-        if (response && response.status === 200 && event.request.method === 'GET') {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        }
-        return response;
-      }).catch(() => new Response('Offline', { status: 503 }));
-    })
+    fetch(freshRequest(event.request)).then(response => {
+      if (response && response.status === 200 && url.origin === self.location.origin) {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+      }
+      return response;
+    }).catch(() => caches.match(event.request).then(cached => cached || new Response('Offline', { status: 503 })))
   );
 });
 
@@ -80,7 +97,7 @@ self.addEventListener('push', event => {
     title: 'Leccy charge reminder',
     body: 'A charge is in progress. Enter the end-charge data when you next use the car.',
     icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-96x96.png',
+    badge: '/icons/icon-androidBar.png',
     url: '/quick-data-entry',
     tag: 'leccy-charge-in-progress',
   };

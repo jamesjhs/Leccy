@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker v1.6.1: Technical Manual
+# Leccy — EV Cost Tracker v1.6.2: Technical Manual
 
 ## Architecture Overview
 
@@ -473,24 +473,25 @@ server {
 
 ## Progressive Web App (PWA)
 
-Leccy v1.6.1 ships as a fully installable PWA. The following files drive this:
+Leccy v1.6.2 ships as a fully installable PWA. The following files drive this:
 
 | File | Purpose |
 |---|---|
 | `client/public/manifest.json` | Web App Manifest (name, icons, theme colour, display mode) |
-| `client/public/sw.js` | Service Worker — cache-first static assets, network-first API, push display, notification click handling |
+| `client/public/sw.js` | Service Worker — network-first navigation/static assets, network-first API, push display, notification click handling |
 | `client/src/components/PwaInstallPrompt.tsx` | Browser-gated install prompt using `beforeinstallprompt` |
 | `client/src/components/PushNotificationPrompt.tsx` | First PWA-launch prompt for enabling push reminders |
-| `client/public/icons/icon-*.png` | PNG icons in 8 sizes (72 → 512 px) generated from the SVG favicon |
+| `client/public/icons/icon-*.png` | PNG icons in 8 sizes (72 -> 512 px) generated from the SVG favicon |
+| `client/public/icons/icon-androidBar.png` | Android notification/status-bar badge icon used only by the Web Notifications `badge` field |
 | `client/public/apple-touch-icon.png` | 180×180 icon used by Safari on iOS |
 
 ### Service Worker strategy
 
-- **Navigation requests** (`mode === 'navigate'`): serve the cached SPA shell (`/`) so the app loads offline after the first visit.
+- **Navigation requests** (`mode === 'navigate'`): network-first; updates the cached SPA shell (`/`) while online and falls back to the cached shell when offline.
 - **`/api/*` requests**: network-first; returns a JSON `503` error response when offline.
-- **All other static assets**: cache-first, populating the cache on the first fetch.
-- Cache is versioned (`leccy-1.6.1`); old caches are purged on activation.
-- The client calls `registration.update()` on load, sends `SKIP_WAITING` to an installed update, and reloads when `controllerchange` fires so installed PWAs move to the newest app version promptly.
+- **All other static assets**: network-first while online, updating the versioned cache and falling back to cached copies when offline.
+- Cache is versioned (`leccy-1.6.2`); old caches are purged on activation.
+- The client registers `sw.js` with `updateViaCache: 'none'`, calls `registration.update()` on load, sends `SKIP_WAITING` to waiting or newly installed updates, and reloads when `controllerchange` fires so installed PWAs move to the newest app version promptly.
 - The production server serves `sw.js` with `Cache-Control: no-store` and `index.html` with `Cache-Control: no-cache` so update checks are not blocked by stale shell files.
 - Push events display charge reminder notifications, and notification clicks focus an existing Leccy window or open `/quick-data-entry`.
 
@@ -517,6 +518,13 @@ Example: £1.23 is stored as `123` pence.
 ---
 
 ## Changelog
+
+### v1.6.2
+
+- Updated Android push notifications to use `icon-androidBar.png` only as the notification `badge`, leaving manifest launcher icons unchanged.
+- Bumped all app/documentation version references to 1.6.2.
+- Changed PWA navigation and static asset fetches to network-first with offline cache fallbacks so versioned service-worker updates refresh local files from the server promptly.
+- Registered the service worker with `updateViaCache: 'none'` and immediately activates an already waiting worker on load.
 
 ### v1.6.1
 

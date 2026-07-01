@@ -11,8 +11,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').then((registration) => {
+    void navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then((registration) => {
       void registration.update();
+
+      if (registration.waiting && navigator.serviceWorker.controller) {
+        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
 
       registration.addEventListener('updatefound', () => {
         const worker = registration.installing;

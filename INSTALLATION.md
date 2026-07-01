@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker v1.6.1: Installation Guide
+# Leccy — EV Cost Tracker v1.6.2: Installation Guide
 
 ## Prerequisites
 
@@ -309,7 +309,7 @@ curl https://leccy.jahosi.co.uk/api/auth/version
 
 ## 11. Installing as a mobile app (PWA)
 
-Leccy v1.6.1 is a fully-featured **Progressive Web App**. Once deployed behind HTTPS, supported browsers show an in-app install prompt on first load. Users can also install it directly from their browser menu with no app store required.
+Leccy v1.6.2 is a fully-featured **Progressive Web App**. Once deployed behind HTTPS, supported browsers show an in-app install prompt on first load. Users can also install it directly from their browser menu with no app store required.
 
 When VAPID keys are configured through `.env` or **Admin Panel → Web Push (VAPID)**, installed PWA users are prompted to enable push notifications on first PWA launch. If a Quick Entry charge start is saved and not yet submitted or cleared, Leccy sends a daily reminder at the user's configured reminder time, defaulting to **07:30**. Users can enable or disable these reminders and change the reminder time from **Account Settings**.
 
@@ -334,5 +334,5 @@ The app will appear on the home screen and launch in standalone mode.
 
 ### PWA updates
 
-The service worker cache is versioned with the app version. On load, installed PWAs check for a newer service worker, activate it immediately when found, purge old caches, and reload the app once the new version controls the page.
+The service worker cache is versioned with the app version. On load, installed PWAs check for a newer service worker without using the HTTP cache, activate it immediately when found, purge old caches, and reload the app once the new version controls the page. Navigation and static assets use a network-first strategy while online so local PWA files are refreshed from the latest server version after a version increment, with cached fallbacks kept for offline use.
 

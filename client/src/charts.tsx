@@ -68,15 +68,26 @@ export interface MiniLineChartProps {
   series: LineSeries[];
   height?: number;
   yFmt?: (v: number) => string;
+  secondarySeries?: LineSeries;
+  secondaryYFmt?: (v: number) => string;
+  secondaryToggleLabel?: string;
 }
 
-export function MiniLineChart({ data, xKey, series, height = 250, yFmt = String }: MiniLineChartProps) {
+export function MiniLineChart({
+  data, xKey, series, height = 250, yFmt = String,
+  secondarySeries, secondaryYFmt = (v) => v.toFixed(0), secondaryToggleLabel = 'Show end-charge temperature',
+}: MiniLineChartProps) {
   const ref = useRef<HTMLDivElement>(null);
   const w = useWidth(ref);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [showSecondary, setShowSecondary] = useState(false);
 
-  const iw = w - M.left - M.right;
-  const ih = height - M.top - M.bottom;
+  const hasSecondary = !!secondarySeries && data.some(d => Number.isFinite(Number(d[secondarySeries.key])));
+  const showSecondaryOverlay = showSecondary && hasSecondary;
+
+  const margin = { ...M, right: hasSecondary ? 44 : M.right };
+  const iw = w - margin.left - margin.right;
+  const ih = height - margin.top - margin.bottom;
 
   if (!data.length) return null;
 
@@ -86,9 +97,18 @@ export function MiniLineChart({ data, xKey, series, height = 250, yFmt = String 
   const toY = (v: number) => ih - (v / yTop) * ih;
   const toX = (i: number) => data.length > 1 ? (i / (data.length - 1)) * iw : iw / 2;
 
+  const secondaryVals = secondarySeries
+    ? data.map(d => Number(d[secondarySeries.key])).filter((v) => Number.isFinite(v))
+    : [];
+  const sMin = secondaryVals.length ? Math.min(...secondaryVals) - 2 : 0;
+  const sMax = secondaryVals.length ? Math.max(...secondaryVals) + 2 : 1;
+  const sRange = sMax - sMin || 1;
+  const toYSecondary = (v: number) => ih - ((v - sMin) / sRange) * ih;
+  const sTickVals = Array.from({ length: 5 }, (_, i) => sMin + (sRange * i) / 4);
+
   function onMouseMove(e: React.MouseEvent<SVGSVGElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
-    const mx = e.clientX - rect.left - M.left;
+    const mx = e.clientX - rect.left - margin.left;
     if (mx < 0 || mx > iw) { setHoverIdx(null); return; }
     setHoverIdx(Math.max(0, Math.min(Math.round((mx / iw) * (data.length - 1)), data.length - 1)));
   }
@@ -97,8 +117,14 @@ export function MiniLineChart({ data, xKey, series, height = 250, yFmt = String 
 
   return (
     <div ref={ref} style={{ width: '100%' }}>
+      {hasSecondary && (
+        <label className="flex items-center gap-1.5 text-xs text-gray-500 mb-2 cursor-pointer select-none w-fit">
+          <input type="checkbox" checked={showSecondary} onChange={(e) => setShowSecondary(e.target.checked)} className="accent-orange-400" />
+          {secondaryToggleLabel}
+        </label>
+      )}
       <svg width={w} height={height} onMouseMove={onMouseMove} onMouseLeave={() => setHoverIdx(null)}>
-        <g transform={`translate(${M.left},${M.top})`}>
+        <g transform={`translate(${margin.left},${margin.top})`}>
           {ticks.map((v, i) => <line key={i} x1={0} y1={toY(v)} x2={iw} y2={toY(v)} stroke="#f0fdf4" />)}
           {ticks.map((v, i) => (
             <text key={i} x={-5} y={toY(v)} textAnchor="end" dominantBaseline="middle" fontSize={10} fill="#9ca3af">
@@ -123,23 +149,55 @@ export function MiniLineChart({ data, xKey, series, height = 250, yFmt = String 
               ))}
             </g>
           ))}
+          {showSecondaryOverlay && secondarySeries && (
+            <g opacity={0.45}>
+              <polyline
+                points={data
+                  .map((d, i) => {
+                    const v = Number(d[secondarySeries.key]);
+                    return Number.isFinite(v) ? `${toX(i)},${toYSecondary(v)}` : null;
+                  })
+                  .filter((p): p is string => p !== null)
+                  .join(' ')}
+                fill="none" stroke={secondarySeries.color} strokeWidth={2} strokeDasharray="4 3"
+              />
+              {data.map((d, i) => {
+                const v = Number(d[secondarySeries.key]);
+                return Number.isFinite(v) ? <circle key={i} cx={toX(i)} cy={toYSecondary(v)} r={3} fill={secondarySeries.color} /> : null;
+              })}
+            </g>
+          )}
+          {showSecondaryOverlay && sTickVals.map((v, i) => (
+            <text key={`s${i}`} x={iw + 6} y={toYSecondary(v)} textAnchor="start" dominantBaseline="middle" fontSize={10} fill={secondarySeries?.color} opacity={0.7}>
+              {secondaryYFmt(v)}
+            </text>
+          ))}
           {hoverIdx !== null && (
             <>
               <line x1={toX(hoverIdx)} y1={0} x2={toX(hoverIdx)} y2={ih} stroke="#9ca3af" strokeWidth={1} strokeDasharray="3 2" />
               <TipBox x={toX(hoverIdx)} y={20} iw={iw} ih={ih} lines={[
                 { label: String(data[hoverIdx][xKey]), value: '', color: '#374151' },
                 ...series.map(s => ({ label: s.label, value: yFmt(Number(data[hoverIdx][s.key]) || 0), color: s.color })),
+                ...(showSecondaryOverlay && secondarySeries && Number.isFinite(Number(data[hoverIdx][secondarySeries.key]))
+                  ? [{ label: secondarySeries.label, value: secondaryYFmt(Number(data[hoverIdx][secondarySeries.key])), color: secondarySeries.color }]
+                  : []),
               ]} />
             </>
           )}
         </g>
-        <g transform={`translate(${M.left},${height - 12})`}>
+        <g transform={`translate(${margin.left},${height - 12})`}>
           {series.map((s, i) => (
             <g key={s.key} transform={`translate(${i * 120},0)`}>
               <line x1={0} y1={0} x2={14} y2={0} stroke={s.color} strokeWidth={2} />
               <text x={18} y={4} fontSize={10} fill="#6b7280">{s.label}</text>
             </g>
           ))}
+          {showSecondaryOverlay && secondarySeries && (
+            <g transform={`translate(${series.length * 120},0)`} opacity={0.7}>
+              <line x1={0} y1={0} x2={14} y2={0} stroke={secondarySeries.color} strokeWidth={2} strokeDasharray="4 3" />
+              <text x={18} y={4} fontSize={10} fill="#6b7280">{secondarySeries.label}</text>
+            </g>
+          )}
         </g>
       </svg>
     </div>
@@ -244,13 +302,34 @@ export interface MiniScatterChartProps {
   height?: number;
   xLabel?: string;
   yLabel?: string;
+  showTrendline?: boolean;
+  trendlineColor?: string;
 }
 
 // Maximum pixel distance from cursor to a scatter point to trigger hover
 const MAX_HOVER_DISTANCE = 40;
 
+// Simple ordinary-least-squares linear regression: returns slope & intercept for y = m*x + c
+function linearRegression(xs: number[], ys: number[]): { slope: number; intercept: number } | null {
+  const n = xs.length;
+  if (n < 2) return null;
+  const xMean = xs.reduce((a, b) => a + b, 0) / n;
+  const yMean = ys.reduce((a, b) => a + b, 0) / n;
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (xs[i] - xMean) * (ys[i] - yMean);
+    den += (xs[i] - xMean) ** 2;
+  }
+  if (den === 0) return null;
+  const slope = num / den;
+  const intercept = yMean - slope * xMean;
+  return { slope, intercept };
+}
+
 export function MiniScatterChart({
   data, xKey, yKey, color = '#16a34a', label = '', height = 250, xLabel = '', yLabel = '',
+  showTrendline = false, trendlineColor = '#dc2626',
 }: MiniScatterChartProps) {
   const ref = useRef<HTMLDivElement>(null);
   const w = useWidth(ref);
@@ -273,6 +352,8 @@ export function MiniScatterChart({
 
   const xT = Array.from({ length: 5 }, (_, i) => xMin + (xRange * i) / 4);
   const yT = Array.from({ length: 5 }, (_, i) => yMin + (yRange * i) / 4);
+
+  const trend = showTrendline ? linearRegression(xs, ys) : null;
 
   function onMouseMove(e: React.MouseEvent<SVGSVGElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -308,6 +389,13 @@ export function MiniScatterChart({
           )}
           <line x1={0} y1={0} x2={0} y2={ih} stroke="#e5e7eb" />
           <line x1={0} y1={ih} x2={iw} y2={ih} stroke="#e5e7eb" />
+          {trend && (
+            <line
+              x1={toX(xMin)} y1={toY(trend.slope * xMin + trend.intercept)}
+              x2={toX(xMax)} y2={toY(trend.slope * xMax + trend.intercept)}
+              stroke={trendlineColor} strokeWidth={2} strokeDasharray="5,4"
+            />
+          )}
           {data.map((_, i) => (
             <circle
               key={i} cx={toX(xs[i])} cy={toY(ys[i])}
@@ -328,6 +416,12 @@ export function MiniScatterChart({
             <text x={14} y={4} fontSize={10} fill="#6b7280">{label}</text>
           </g>
         )}
+        {trend && (
+          <g transform={`translate(${M.left + 100},${height - 12})`}>
+            <line x1={0} y1={0} x2={12} y2={0} stroke={trendlineColor} strokeWidth={2} strokeDasharray="5,4" />
+            <text x={18} y={4} fontSize={10} fill="#6b7280">Trendline</text>
+          </g>
+        )}
       </svg>
     </div>
   );
@@ -338,6 +432,7 @@ export interface BatteryHealthPoint {
   odometer: number;
   date: string;
   max_range_100_pct: number;
+  end_charge_temperature?: number;
 }
 
 export function BatteryHealthChart({
@@ -350,8 +445,11 @@ export function BatteryHealthChart({
   const ref = useRef<HTMLDivElement>(null);
   const w = useWidth(ref);
   const [hover, setHover] = useState<number | null>(null);
+  const [showTemp, setShowTemp] = useState(false);
 
-  const ML = { top: 24, right: 16, bottom: 38, left: 56 };
+  const hasTemp = data.some(d => Number.isFinite(d.end_charge_temperature));
+
+  const ML = { top: 24, right: hasTemp ? 44 : 16, bottom: 38, left: 56 };
   const iw = w - ML.left - ML.right;
   const ih = height - ML.top - ML.bottom;
 
@@ -360,6 +458,7 @@ export function BatteryHealthChart({
   const sorted = [...data].sort((a, b) => a.odometer - b.odometer);
   const xs = sorted.map(d => d.odometer);
   const ys = sorted.map(d => d.max_range_100_pct);
+  const temps = sorted.map(d => d.end_charge_temperature);
 
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
   const yMin = Math.max(0, Math.min(...ys) - 5);
@@ -369,6 +468,14 @@ export function BatteryHealthChart({
 
   const toX = (v: number) => ((v - xMin) / xRange) * iw;
   const toY = (v: number) => ih - ((v - yMin) / yRange) * ih;
+
+  const showTempOverlay = showTemp && hasTemp;
+  const finiteTemps = temps.filter((t): t is number => Number.isFinite(t));
+  const tMin = finiteTemps.length ? Math.min(...finiteTemps) - 2 : 0;
+  const tMax = finiteTemps.length ? Math.max(...finiteTemps) + 2 : 1;
+  const tRange = tMax - tMin || 1;
+  const toYTemp = (v: number) => ih - ((v - tMin) / tRange) * ih;
+  const tTickVals = Array.from({ length: 5 }, (_, i) => tMin + (tRange * i) / 4);
 
   // Linear trendline via least-squares
   const n = sorted.length;
@@ -405,6 +512,12 @@ export function BatteryHealthChart({
 
   return (
     <div ref={ref} style={{ width: '100%' }}>
+      {hasTemp && (
+        <label className="flex items-center gap-1.5 text-xs text-gray-500 mb-2 cursor-pointer select-none w-fit">
+          <input type="checkbox" checked={showTemp} onChange={(e) => setShowTemp(e.target.checked)} className="accent-orange-400" />
+          Show end-charge temperature
+        </label>
+      )}
       <svg width={w} height={height} onMouseMove={onMouseMove} onMouseLeave={() => setHover(null)}>
         <g transform={`translate(${ML.left},${ML.top})`}>
           {yTickVals.map((v, i) => (
@@ -422,6 +535,9 @@ export function BatteryHealthChart({
           ))}
           <text x={iw / 2} y={ih + 28} textAnchor="middle" fontSize={10} fill="#9ca3af">Odometer (mi)</text>
           <text x={-ih / 2} y={-40} textAnchor="middle" fontSize={10} fill="#9ca3af" transform="rotate(-90)">Max Range @ 100% (mi)</text>
+          {showTempOverlay && (
+            <text x={iw + 40} y={-ih / 2} textAnchor="middle" fontSize={10} fill="#fb923c" opacity={0.7} transform={`rotate(90, ${iw + 40}, ${-ih / 2})`}>°C</text>
+          )}
           <line x1={0} y1={0} x2={0} y2={ih} stroke="#e5e7eb" />
           <line x1={0} y1={ih} x2={iw} y2={ih} stroke="#e5e7eb" />
           {/* Trendline */}
@@ -432,6 +548,28 @@ export function BatteryHealthChart({
               stroke="#86efac" strokeWidth={1.5} strokeDasharray="5 3" opacity={0.7}
             />
           )}
+          {/* Temperature overlay (secondary axis, faded) */}
+          {showTempOverlay && (
+            <g opacity={0.45}>
+              <polyline
+                points={sorted
+                  .map((d, i) => (Number.isFinite(temps[i]) ? `${toX(d.odometer)},${toYTemp(temps[i] as number)}` : null))
+                  .filter((p): p is string => p !== null)
+                  .join(' ')}
+                fill="none" stroke="#fb923c" strokeWidth={2} strokeDasharray="4 3"
+              />
+              {sorted.map((d, i) => (
+                Number.isFinite(temps[i]) && (
+                  <circle key={i} cx={toX(d.odometer)} cy={toYTemp(temps[i] as number)} r={3} fill="#fb923c" />
+                )
+              ))}
+            </g>
+          )}
+          {showTempOverlay && tTickVals.map((v, i) => (
+            <text key={`t${i}`} x={iw + 6} y={toYTemp(v)} textAnchor="start" dominantBaseline="middle" fontSize={10} fill="#fb923c" opacity={0.7}>
+              {v.toFixed(0)}
+            </text>
+          ))}
           {/* Data points */}
           {sorted.map((d, i) => (
             <circle
@@ -445,6 +583,9 @@ export function BatteryHealthChart({
               { label: 'Odometer', value: `${xs[hover].toLocaleString()} mi`, color: '#374151' },
               { label: 'Date', value: sorted[hover].date.slice(0, 10), color: '#6b7280' },
               { label: 'Max Range', value: `${ys[hover].toFixed(1)} mi`, color: '#16a34a' },
+              ...(showTempOverlay && Number.isFinite(temps[hover])
+                ? [{ label: 'End-charge temp', value: `${(temps[hover] as number).toFixed(1)}°C`, color: '#fb923c' }]
+                : []),
             ]} />
           )}
         </g>
@@ -453,6 +594,12 @@ export function BatteryHealthChart({
           <text x={14} y={4} fontSize={10} fill="#6b7280">Max Range @ 100%</text>
           <line x1={130} y1={0} x2={144} y2={0} stroke="#86efac" strokeWidth={1.5} strokeDasharray="5 3" />
           <text x={148} y={4} fontSize={10} fill="#6b7280">Trend</text>
+          {showTempOverlay && (
+            <g transform="translate(200,0)" opacity={0.7}>
+              <line x1={0} y1={0} x2={14} y2={0} stroke="#fb923c" strokeWidth={2} strokeDasharray="4 3" />
+              <text x={18} y={4} fontSize={10} fill="#6b7280">End-charge temp</text>
+            </g>
+          )}
         </g>
       </svg>
     </div>

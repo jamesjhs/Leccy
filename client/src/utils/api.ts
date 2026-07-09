@@ -469,9 +469,11 @@ export interface OwnershipCostSummary {
 export interface TempVsRange {
   temp_celsius: number;
   range_per_pct: number;
+  predicted_100_pct_range: number;
 }
 
 export interface MilesPerPct {
   date: string;
   miles_per_pct: number;
+  temp_celsius: number;
 }

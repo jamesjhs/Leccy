@@ -3,7 +3,7 @@
    Network-first for live assets/APIs, offline fallback from cache
    ============================================================ */
 
-const CACHE_NAME = 'leccy-1.6.2';
+const CACHE_NAME = 'leccy-1.6.3';
 
 const STATIC_ASSETS = [
   '/',

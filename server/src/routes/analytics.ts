@@ -152,11 +152,13 @@ router.get('/', validateQuery(analyticsQuerySchema), (req: Request, res: Respons
           tempVsRange.push({
             temp_celsius: s.air_temp_celsius,
             range_per_pct: Math.round(rangePerPct * 100) / 100,
+            predicted_100_pct_range: Math.round(rangePerPct * 100 * 10) / 10,
           });
 
           milesPerPct.push({
             date: s.date_unplugged,
             miles_per_pct: Math.round(rangePerPct * 100) / 100,
+            temp_celsius: s.air_temp_celsius,
           });
         }
       }

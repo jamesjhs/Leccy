@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker v1.6.2: Technical Manual
+# Leccy — EV Cost Tracker v1.6.3: Technical Manual
 
 ## Architecture Overview
 
@@ -473,7 +473,7 @@ server {
 
 ## Progressive Web App (PWA)
 
-Leccy v1.6.2 ships as a fully installable PWA. The following files drive this:
+Leccy v1.6.3 ships as a fully installable PWA. The following files drive this:
 
 | File | Purpose |
 |---|---|
@@ -490,7 +490,7 @@ Leccy v1.6.2 ships as a fully installable PWA. The following files drive this:
 - **Navigation requests** (`mode === 'navigate'`): network-first; updates the cached SPA shell (`/`) while online and falls back to the cached shell when offline.
 - **`/api/*` requests**: network-first; returns a JSON `503` error response when offline.
 - **All other static assets**: network-first while online, updating the versioned cache and falling back to cached copies when offline.
-- Cache is versioned (`leccy-1.6.2`); old caches are purged on activation.
+- Cache is versioned (`leccy-1.6.3`); old caches are purged on activation.
 - The client registers `sw.js` with `updateViaCache: 'none'`, calls `registration.update()` on load, sends `SKIP_WAITING` to waiting or newly installed updates, and reloads when `controllerchange` fires so installed PWAs move to the newest app version promptly.
 - The production server serves `sw.js` with `Cache-Control: no-store` and `index.html` with `Cache-Control: no-cache` so update checks are not blocked by stale shell files.
 - Push events display charge reminder notifications, and notification clicks focus an existing Leccy window or open `/quick-data-entry`.
@@ -518,6 +518,13 @@ Example: £1.23 is stored as `123` pence.
 ---
 
 ## Changelog
+
+### v1.6.3
+
+- Added an Analytics-page "Noise Reduction" slider that rejects data points beyond a user-defined standard-deviation threshold from the mean, applied across all charts (efficiency, cost/kWh per session, temperature-vs-range, miles/%, odometer efficiency, battery capacity, battery health, thermal impact, GOM accuracy, range anxiety, charging habits).
+- Refashioned "Temperature vs Range per 1% Battery" into "Temperature vs Predicted 100% Range" with a linear regression trendline overlay.
+- Added toggleable, faded secondary-axis end-charge-temperature overlays to the Battery Health Proxy, Miles per 1% Battery Over Time, and Battery Efficiency Over Time charts.
+- Bumped all app/documentation version references to 1.6.3.
 
 ### v1.6.2
 

@@ -42,7 +42,10 @@ function excludeStdDevOutliers<T>(
   return data.filter((item) => Math.abs(getValue(item) - mean) <= maxStdDev * stdDev);
 }
 
-function excludeGOMOutliers(data: GOMChartPoint[]): { filtered: GOMChartPoint[]; removed: number } {
+function excludeGOMOutliers(
+  data: GOMChartPoint[],
+  maxStdDev = 2,
+): { filtered: GOMChartPoint[]; removed: number } {
   if (data.length < 5) return { filtered: data, removed: 0 };
 
   const withLogRatio = data
@@ -59,10 +62,12 @@ function excludeGOMOutliers(data: GOMChartPoint[]): { filtered: GOMChartPoint[];
   const mad = median(deviations);
   if (mad === 0) return { filtered: data, removed: 0 };
 
-  // Iglewicz-Hoaglin modified z-score: |Mi| > 3.5 is a robust outlier rule.
+  // Iglewicz-Hoaglin modified z-score, scaled by the user's noise-reduction setting
+  // (the conventional 3.5 threshold corresponds to a 2 std-dev noise-reduction level).
+  const modifiedZThreshold = maxStdDev * 1.75;
   const kept = new Set(
     withLogRatio
-      .filter(({ value }) => Math.abs((0.6745 * (value - center)) / mad) <= 3.5)
+      .filter(({ value }) => Math.abs((0.6745 * (value - center)) / mad) <= modifiedZThreshold)
       .map(({ point }) => point),
   );
   const filtered = data.filter((point) => kept.has(point));
@@ -109,6 +114,7 @@ export default function Analytics() {
   const [data, setData] = useState<AnalyticsResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [chargeTypeFilter, setChargeTypeFilter] = useState<ChargeTypeFilter>('all');
+  const [noiseReductionStdDev, setNoiseReductionStdDev] = useState(2);
 
   useEffect(() => {
     async function loadSetupData() {
@@ -156,7 +162,7 @@ export default function Analytics() {
   ];
 
   const filteredEfficiencyData = data
-    ? excludeStdDevOutliers(data.efficiency_data, (point) => point.battery_efficiency)
+    ? excludeStdDevOutliers(data.efficiency_data, (point) => point.battery_efficiency, noiseReductionStdDev)
     : [];
   const chargeTypeButtons: { key: ChargeTypeFilter; label: string }[] = [
     { key: 'all', label: 'All' },
@@ -168,13 +174,56 @@ export default function Analytics() {
         chargeTypeFilter === 'all' ? true : point.charger_type === chargeTypeFilter,
       )
     : [];
-  const costChartData = filteredCostPerSession.filter((point) => point.cost_pence > 0);
-  const kwhChartData = filteredCostPerSession.filter((point) => point.energy_kwh > 0);
+  const costChartData = excludeStdDevOutliers(
+    filteredCostPerSession.filter((point) => point.cost_pence > 0),
+    (point) => point.cost_pence,
+    noiseReductionStdDev,
+  );
+  const kwhChartData = excludeStdDevOutliers(
+    filteredCostPerSession.filter((point) => point.energy_kwh > 0),
+    (point) => point.energy_kwh,
+    noiseReductionStdDev,
+  );
+  const filteredTempVsRange = data
+    ? excludeStdDevOutliers(data.temp_vs_range, (point) => point.predicted_100_pct_range, noiseReductionStdDev)
+    : [];
+  const filteredMilesPerPct = data
+    ? excludeStdDevOutliers(data.miles_per_pct, (point) => point.miles_per_pct, noiseReductionStdDev)
+    : [];
   const insights = data?.derived_insights;
+  const filteredOdometerEfficiency = insights
+    ? excludeStdDevOutliers(insights.odometer_efficiency, (point) => point.kwh_per_mile, noiseReductionStdDev)
+    : [];
+  const filteredBatteryCapacity = insights
+    ? excludeStdDevOutliers(insights.battery_capacity, (point) => point.estimated_usable_capacity_kwh, noiseReductionStdDev)
+    : [];
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-green-900 mb-6">Analytics</h1>
+
+      {/* Noise reduction slider */}
+      <div className="bg-white rounded-xl shadow-sm border border-green-100 p-4 mb-6">
+        <div className="flex items-center justify-between mb-1">
+          <label htmlFor="noise-reduction" className="text-sm font-semibold text-green-800">
+            Noise Reduction
+          </label>
+          <span className="text-sm font-bold text-green-700">{noiseReductionStdDev.toFixed(1)}σ</span>
+        </div>
+        <input
+          id="noise-reduction"
+          type="range"
+          min={0.5}
+          max={4}
+          step={0.1}
+          value={noiseReductionStdDev}
+          onChange={(e) => setNoiseReductionStdDev(Number(e.target.value))}
+          className="w-full accent-green-700"
+        />
+        <p className="text-xs text-gray-400 mt-1">
+          Rejects data points that fall outside {noiseReductionStdDev.toFixed(1)} standard deviations from the mean on every chart below. Lower values filter more aggressively.
+        </p>
+      </div>
 
       {tariffs.length === 0 && <TariffSetupPrompt />}
       {vehicles.length === 0 && <VehicleSetupPrompt />}
@@ -302,10 +351,10 @@ export default function Analytics() {
                 )}
               </section>
 
-              {insights.odometer_efficiency.length > 0 && (
+              {filteredOdometerEfficiency.length > 0 && (
                 <ChartCard title="Odometer-Based Efficiency (kWh/mile)">
                   <MiniLineChart
-                    data={insights.odometer_efficiency as unknown as Record<string, unknown>[]}
+                    data={filteredOdometerEfficiency as unknown as Record<string, unknown>[]}
                     xKey="date"
                     series={[{ key: 'kwh_per_mile', color: '#0d9488', label: 'kWh/mile' }]}
                     height={250}
@@ -326,10 +375,10 @@ export default function Analytics() {
                 </ChartCard>
               )}
 
-              {insights.battery_capacity.length > 0 && (
+              {filteredBatteryCapacity.length > 0 && (
                 <ChartCard title="Measured-kWh Usable Capacity Proxy">
                   <MiniLineChart
-                    data={insights.battery_capacity as unknown as Record<string, unknown>[]}
+                    data={filteredBatteryCapacity as unknown as Record<string, unknown>[]}
                     xKey="date"
                     series={[
                       { key: 'estimated_usable_capacity_kwh', color: '#7c3aed', label: 'Usable kWh' },
@@ -365,6 +414,8 @@ export default function Analytics() {
                 xKey="date"
                 series={[{ key: 'battery_efficiency', color: '#16a34a', label: 'kWh/mile' }]}
                 height={250}
+                secondarySeries={{ key: 'temp_celsius', color: '#fb923c', label: 'End-charge temp' }}
+                secondaryYFmt={(v) => `${v.toFixed(0)}°C`}
               />
             </ChartCard>
           )}
@@ -422,30 +473,33 @@ export default function Analytics() {
             </section>
           )}
 
-          {/* Chart 3: Temperature vs range efficiency */}
-          {data.temp_vs_range.length > 0 && (
-            <ChartCard title="Temperature vs Range per 1% Battery">
+          {/* Chart 3: Temperature vs predicted 100% range */}
+          {filteredTempVsRange.length > 0 && (
+            <ChartCard title="Temperature vs Predicted 100% Range">
               <MiniScatterChart
-                data={data.temp_vs_range as unknown as Record<string, unknown>[]}
+                data={filteredTempVsRange as unknown as Record<string, unknown>[]}
                 xKey="temp_celsius"
-                yKey="range_per_pct"
+                yKey="predicted_100_pct_range"
                 color="#16a34a"
-                label="Range per %"
+                label="Predicted 100% range"
                 height={250}
                 xLabel="°C"
-                yLabel="mi/%"
+                yLabel="mi"
+                showTrendline
               />
             </ChartCard>
           )}
 
           {/* Chart 4: Miles per % */}
-          {data.miles_per_pct.length > 0 && (
+          {filteredMilesPerPct.length > 0 && (
             <ChartCard title="Miles per 1% Battery Over Time">
               <MiniLineChart
-                data={data.miles_per_pct as unknown as Record<string, unknown>[]}
+                data={filteredMilesPerPct as unknown as Record<string, unknown>[]}
                 xKey="date"
                 series={[{ key: 'miles_per_pct', color: '#15803d', label: 'mi per %' }]}
                 height={250}
+                secondarySeries={{ key: 'temp_celsius', color: '#fb923c', label: 'End-charge temp' }}
+                secondaryYFmt={(v) => `${v.toFixed(0)}°C`}
               />
             </ChartCard>
           )}
@@ -461,18 +515,31 @@ export default function Analytics() {
             const es = data.enriched_sessions;
 
             // Chart 1: Battery Health Proxy
-            const batteryHealthData = es
-              .filter(s => s.max_range_100_pct > 0)
-              .map(s => ({ odometer: s.odometer, date: s.date, max_range_100_pct: s.max_range_100_pct }));
+            const batteryHealthData = excludeStdDevOutliers(
+              es
+                .filter(s => s.max_range_100_pct > 0)
+                .map(s => ({
+                  odometer: s.odometer,
+                  date: s.date,
+                  max_range_100_pct: s.max_range_100_pct,
+                  end_charge_temperature: s.end_charge_temperature,
+                })),
+              (point) => point.max_range_100_pct,
+              noiseReductionStdDev,
+            );
 
             // Chart 2: Thermal Impact
-            const thermalData = es
-              .filter(s => s.energy_kwh > 0)
-              .map(s => ({
-                end_charge_temperature: s.end_charge_temperature,
-                energy_kwh: s.energy_kwh,
-                initial_battery_percent: s.initial_battery_percent,
-              }));
+            const thermalData = excludeStdDevOutliers(
+              es
+                .filter(s => s.energy_kwh > 0)
+                .map(s => ({
+                  end_charge_temperature: s.end_charge_temperature,
+                  energy_kwh: s.energy_kwh,
+                  initial_battery_percent: s.initial_battery_percent,
+                })),
+              (point) => point.energy_kwh,
+              noiseReductionStdDev,
+            );
 
             // Chart 3: GOM Accuracy
             const gomData = es
@@ -482,17 +549,25 @@ export default function Analytics() {
                 distance_driven: s.distance_driven!,
                 date: s.date,
               }));
-            const gomOutlierResult = excludeGOMOutliers(gomData);
+            const gomOutlierResult = excludeGOMOutliers(gomData, noiseReductionStdDev);
 
             // Chart 4: Range Anxiety
-            const anxietyData = es.map(s => s.initial_battery_percent);
+            const anxietyData = excludeStdDevOutliers(
+              es.map(s => s.initial_battery_percent),
+              (value) => value,
+              noiseReductionStdDev,
+            );
 
             // Chart 5: Charging Habits
-            const habitsData = es.map(s => ({
-              date: s.date,
-              energy_kwh: s.energy_kwh,
-              pct_charged: s.pct_charged,
-            }));
+            const habitsData = excludeStdDevOutliers(
+              es.map(s => ({
+                date: s.date,
+                energy_kwh: s.energy_kwh,
+                pct_charged: s.pct_charged,
+              })),
+              (point) => point.energy_kwh,
+              noiseReductionStdDev,
+            );
 
             return (
               <>

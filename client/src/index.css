@@ -1,7 +1,7 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js";
 
 body {
-  @apply bg-green-50 min-h-screen;
+  background-color: #f0fdf4;
+  min-height: 100vh;
 }

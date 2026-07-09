@@ -4,6 +4,8 @@ import { useAuth } from './hooks/useAuth';
 import Layout from './components/Layout';
 import CookieNotice from './components/CookieNotice';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
+import PushNotificationPrompt from './components/PushNotificationPrompt';
+import Seo from './components/Seo';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import AccountSettings from './pages/AccountSettings';
@@ -54,8 +56,10 @@ export default function App() {
   return (
     <AuthContext.Provider value={auth}>
       <BrowserRouter>
+        <Seo />
         <CookieNotice />
         <PwaInstallPrompt />
+        <PushNotificationPrompt />
         <Routes>
           <Route path="/login" element={auth.user && !auth.isLoading ? <Navigate to={DEFAULT_AUTH_ROUTE} replace /> : <Login />} />
           <Route path="/register" element={auth.user && !auth.isLoading ? <Navigate to={DEFAULT_AUTH_ROUTE} replace /> : <Register />} />

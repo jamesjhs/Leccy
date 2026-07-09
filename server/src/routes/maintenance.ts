@@ -76,7 +76,7 @@ router.post('/', validate(maintenanceSchema), (req: Request, res: Response): voi
 router.delete('/:id', (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const entryId = parseInt(req.params.id, 10);
+    const entryId = parseInt(String(req.params.id), 10);
 
     if (!Number.isInteger(entryId) || entryId <= 0) {
       res.status(400).json({ error: 'Invalid entry ID' });

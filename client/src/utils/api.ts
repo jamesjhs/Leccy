@@ -130,6 +130,24 @@ export const analyticsApi = {
     api.get<AnalyticsResult>('/analytics', { params }),
 };
 
+// ---------- Public ----------
+export const publicApi = {
+  stats: () => api.get<PublicStats>('/public/stats'),
+};
+
+// ---------- Push Notifications ----------
+export const pushApi = {
+  getVapidPublicKey: () => api.get<{ publicKey: string }>('/push/vapid-public-key'),
+  getSettings: () => api.get<PushSettings>('/push/settings'),
+  updateSettings: (data: Partial<Pick<PushSettings, 'enabled' | 'reminder_time' | 'time_zone'>>) =>
+    api.put<PushSettings>('/push/settings', data),
+  subscribe: (subscription: PushSubscriptionJSON) => api.post<{ ok: boolean }>('/push/subscribe', subscription),
+  unsubscribe: (endpoint: string) => api.delete('/push/subscribe', { endpoint }),
+  chargeStarted: (data: { vehicle_id?: number | null; started_at?: string; time_zone?: string | null }) =>
+    api.post<{ ok: boolean }>('/push/charge-started', data),
+  clearChargeStarted: () => api.delete('/push/charge-started'),
+};
+
 // ---------- Vehicles ----------
 export const vehiclesApi = {
   getAll: () => api.get<{ vehicles: Vehicle[] }>('/vehicles'),
@@ -145,6 +163,9 @@ export const adminApi = {
   deleteUser: (id: number) => api.delete(`/admin/users/${id}`),
   getSettings: () => api.get<{ settings: AppSetting[] }>('/admin/settings'),
   updateSettings: (data: Record<string, string>) => api.put('/admin/settings', data),
+  getVapidSettings: () => api.get<VapidSettings>('/admin/vapid'),
+  updateVapidSettings: (data: VapidSettingsUpdate) => api.put('/admin/vapid', data),
+  generateVapidKeys: () => api.get<Pick<VapidSettingsUpdate, 'publicKey' | 'privateKey'>>('/admin/vapid/generate'),
 };
 
 // ---------- Types ----------
@@ -171,6 +192,14 @@ export interface NewVehicle {
   nickname?: string;
   vehicle_type?: string;
   battery_kwh?: number | null;
+  apply_existing_data?: boolean;
+}
+
+export interface PushSettings {
+  enabled: boolean;
+  reminder_time: string;
+  time_zone: string | null;
+  configured: boolean;
 }
 
 export interface ChargingSession {
@@ -205,7 +234,9 @@ export interface ChargerCost {
   session_id: number;
   user_id: number;
   energy_kwh: number;
+  energy_source: 'measured' | 'estimated';
   price_pence: number;
+  price_calculated: number;
   charger_type: 'home' | 'public';
   charger_name: string | null;
   created_at: string;
@@ -219,7 +250,9 @@ export interface ChargerCostWithDate extends ChargerCost {
 export interface NewChargerCost {
   session_id: number;
   energy_kwh: number;
+  energy_source?: 'measured' | 'estimated';
   price_pence: number;
+  price_calculated?: boolean;
   charger_type: 'home' | 'public';
   charger_name?: string;
 }
@@ -269,6 +302,19 @@ export interface AppSetting {
   value: string;
 }
 
+export interface VapidSettings {
+  publicKey: string;
+  subject: string;
+  privateKeyConfigured: boolean;
+  configured: boolean;
+}
+
+export interface VapidSettingsUpdate {
+  publicKey: string;
+  privateKey: string;
+  subject: string;
+}
+
 export interface NewUser {
   email: string;
   password: string;
@@ -287,6 +333,28 @@ export interface AnalyticsResult {
   temp_vs_range: TempVsRange[];
   miles_per_pct: MilesPerPct[];
   enriched_sessions: EnrichedSession[];
+  derived_insights: DerivedInsights;
+}
+
+export interface DerivedInsights {
+  odometer_efficiency: OdometerEfficiencyPoint[];
+  temperature_efficiency: TemperatureEfficiencyBand[];
+  home_away: HomeAwayEconomics;
+  battery_capacity: BatteryCapacityPoint[];
+  battery_stress: BatteryStressSummary;
+  charging_behavior: ChargingBehaviorSummary;
+  gom_trust: GOMTrustSummary;
+  data_quality: DataQualitySummary;
+  ownership_cost: OwnershipCostSummary;
+}
+
+export interface PublicStats {
+  miles_tracked: number;
+  total_cost_pence: number;
+  savings_pence: number;
+  savings_percent: number;
+  sessions_logged: number;
+  cost_per_mile_pence: number;
 }
 
 export interface EnrichedSession {
@@ -313,6 +381,89 @@ export interface CostPerSession {
   date: string;
   cost_pence: number;
   energy_kwh: number;
+  energy_source: 'measured' | 'estimated' | null;
+  charger_type: 'home' | 'public' | null;
+}
+
+export interface OdometerEfficiencyPoint {
+  date: string;
+  trip_miles: number;
+  energy_kwh: number;
+  kwh_per_mile: number;
+  cost_per_mile_pence: number;
+  charger_type: 'home' | 'public' | null;
+  energy_source: 'measured' | 'estimated' | null;
+}
+
+export interface TemperatureEfficiencyBand {
+  band: string;
+  sessions: number;
+  avg_kwh_per_mile: number;
+}
+
+export interface HomeAwayEconomics {
+  home_sessions: number;
+  away_sessions: number;
+  home_kwh: number;
+  away_kwh: number;
+  home_cost_pence: number;
+  away_cost_pence: number;
+  home_costed_sessions: number;
+  away_costed_sessions: number;
+  home_avg_cost_per_charge_pence: number;
+  away_avg_cost_per_charge_pence: number;
+  home_avg_pence_per_kwh: number;
+  away_avg_pence_per_kwh: number;
+  away_cost_premium_pence: number;
+}
+
+export interface BatteryCapacityPoint {
+  date: string;
+  estimated_usable_capacity_kwh: number;
+  nominal_battery_kwh: number;
+  capacity_ratio_pct: number;
+  soc_delta_pct: number;
+}
+
+export interface BatteryStressSummary {
+  score: number;
+  level: 'Low' | 'Moderate' | 'High';
+  low_soc_sessions: number;
+  high_final_soc_sessions: number;
+  deep_cycle_sessions: number;
+  hot_sessions: number;
+  public_sessions: number;
+}
+
+export interface ChargingBehaviorSummary {
+  profile: string;
+  median_plugin_soc: number;
+  median_soc_gain: number;
+  public_session_pct: number;
+  avg_days_between_charges: number;
+  low_buffer_sessions: number;
+}
+
+export interface GOMTrustSummary {
+  sample_count: number;
+  ratio_pct: number;
+  label: string;
+}
+
+export interface DataQualitySummary {
+  total_sessions: number;
+  measured_kwh_sessions: number;
+  estimated_kwh_sessions: number;
+  no_kwh_sessions: number;
+  costed_sessions: number;
+  measured_kwh_pct: number;
+}
+
+export interface OwnershipCostSummary {
+  charging_cost_pence: number;
+  maintenance_cost_pence: number;
+  total_running_cost_pence: number;
+  running_cost_per_mile_pence: number;
 }
 
 export interface TempVsRange {

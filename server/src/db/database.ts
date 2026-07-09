@@ -32,6 +32,9 @@ function initializeDatabase(): void {
       display_name TEXT,
       failed_login_attempts INTEGER NOT NULL DEFAULT 0,
       locked_until TEXT,
+      push_notifications_enabled INTEGER NOT NULL DEFAULT 0,
+      push_reminder_time TEXT NOT NULL DEFAULT '07:30',
+      push_time_zone TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -66,6 +69,26 @@ function initializeDatabase(): void {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      endpoint TEXT NOT NULL UNIQUE,
+      keys_p256dh TEXT NOT NULL,
+      keys_auth TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS pending_charge_reminders (
+      user_id INTEGER PRIMARY KEY,
+      vehicle_id INTEGER,
+      started_at TEXT NOT NULL,
+      last_notified_date TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL
+    );
+
     CREATE TABLE IF NOT EXISTS charging_sessions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -88,7 +111,9 @@ function initializeDatabase(): void {
       session_id INTEGER NOT NULL,
       user_id INTEGER NOT NULL,
       energy_kwh REAL NOT NULL,
+      energy_source TEXT NOT NULL DEFAULT 'measured' CHECK(energy_source IN ('measured', 'estimated')),
       price_pence INTEGER NOT NULL,
+      price_calculated INTEGER NOT NULL DEFAULT 0,
       charger_type TEXT NOT NULL CHECK(charger_type IN ('home', 'public')),
       charger_name TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -229,6 +254,18 @@ function runMigrations(): void {
     db.exec(`ALTER TABLE users ADD COLUMN locked_until TEXT`);
     console.log('[DB] Migration: added users.locked_until');
   }
+  if (!userCols.includes('push_notifications_enabled')) {
+    db.exec(`ALTER TABLE users ADD COLUMN push_notifications_enabled INTEGER NOT NULL DEFAULT 0`);
+    console.log('[DB] Migration: added users.push_notifications_enabled');
+  }
+  if (!userCols.includes('push_reminder_time')) {
+    db.exec(`ALTER TABLE users ADD COLUMN push_reminder_time TEXT NOT NULL DEFAULT '07:30'`);
+    console.log('[DB] Migration: added users.push_reminder_time');
+  }
+  if (!userCols.includes('push_time_zone')) {
+    db.exec(`ALTER TABLE users ADD COLUMN push_time_zone TEXT`);
+    console.log('[DB] Migration: added users.push_time_zone');
+  }
 
   // v1.0.4: Remove NOT NULL from users.licence_plate so admin-created (email-only)
   // users can be inserted without a licence plate.
@@ -258,16 +295,21 @@ function runMigrations(): void {
           display_name           TEXT,
           failed_login_attempts  INTEGER NOT NULL DEFAULT 0,
           locked_until           TEXT,
+          push_notifications_enabled INTEGER NOT NULL DEFAULT 0,
+          push_reminder_time     TEXT NOT NULL DEFAULT '07:30',
+          push_time_zone         TEXT,
           created_at             TEXT NOT NULL DEFAULT (datetime('now'))
         )
       `);
       db.exec(`
         INSERT INTO users
           (id, licence_plate, password_hash, is_admin, email, display_name,
-           failed_login_attempts, locked_until, created_at)
+           failed_login_attempts, locked_until, push_notifications_enabled,
+           push_reminder_time, push_time_zone, created_at)
         SELECT
           id, licence_plate, password_hash, is_admin, email, display_name,
-          failed_login_attempts, locked_until, created_at
+          failed_login_attempts, locked_until, push_notifications_enabled,
+          push_reminder_time, push_time_zone, created_at
         FROM users_v103
       `);
       db.exec(`DROP TABLE users_v103`);
@@ -318,6 +360,16 @@ function runMigrations(): void {
   if (!sessionCols.includes('date_started')) {
     db.exec(`ALTER TABLE charging_sessions ADD COLUMN date_started TEXT`);
     console.log('[DB] Migration: added charging_sessions.date_started');
+  }
+
+  const chargerCostCols = (db.pragma('table_info(charger_costs)') as Array<{ name: string }>).map((c) => c.name);
+  if (!chargerCostCols.includes('energy_source')) {
+    db.exec(`ALTER TABLE charger_costs ADD COLUMN energy_source TEXT NOT NULL DEFAULT 'measured'`);
+    console.log('[DB] Migration: added charger_costs.energy_source');
+  }
+  if (!chargerCostCols.includes('price_calculated')) {
+    db.exec(`ALTER TABLE charger_costs ADD COLUMN price_calculated INTEGER NOT NULL DEFAULT 0`);
+    console.log('[DB] Migration: added charger_costs.price_calculated');
   }
 
   // vehicle_id on maintenance_log

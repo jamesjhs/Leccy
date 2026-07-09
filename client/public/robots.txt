@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /account
+Disallow: /admin
+Disallow: /analytics
+Disallow: /dashboard
+Disallow: /data-entry
+Disallow: /maintenance
+Disallow: /quick-data-entry
+Disallow: /tariff
+Disallow: /vehicles
+
+Sitemap: https://leccy.app/sitemap.xml

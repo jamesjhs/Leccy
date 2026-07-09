@@ -25,11 +25,12 @@ router.get('/', (_req: Request, res: Response): void => {
 router.post('/', validate(createVehicleSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const { licence_plate, nickname, vehicle_type, battery_kwh } = req.body as {
+    const { licence_plate, nickname, vehicle_type, battery_kwh, apply_existing_data } = req.body as {
       licence_plate: string;
       nickname?: string;
       vehicle_type?: string;
       battery_kwh?: number | null;
+      apply_existing_data?: boolean;
     };
 
     const existing = db.prepare(`SELECT id FROM vehicles WHERE licence_plate = ?`).get(licence_plate);
@@ -38,14 +39,27 @@ router.post('/', validate(createVehicleSchema), (req: Request, res: Response): v
       return;
     }
 
-    const result = db
-      .prepare(`INSERT INTO vehicles (user_id, licence_plate, nickname, vehicle_type, battery_kwh) VALUES (?, ?, ?, ?, ?)`)
-      .run(authReq.user!.userId, licence_plate, nickname ?? null, vehicle_type ?? null, battery_kwh ?? null);
+    const createVehicle = db.transaction(() => {
+      const vehicleCount = db
+        .prepare(`SELECT COUNT(*) AS count FROM vehicles WHERE user_id = ?`)
+        .get(authReq.user!.userId) as { count: number };
 
-    const vehicle = db
-      .prepare(`SELECT * FROM vehicles WHERE id = ?`)
-      .get(result.lastInsertRowid) as Vehicle;
+      const result = db
+        .prepare(`INSERT INTO vehicles (user_id, licence_plate, nickname, vehicle_type, battery_kwh) VALUES (?, ?, ?, ?, ?)`)
+        .run(authReq.user!.userId, licence_plate, nickname ?? null, vehicle_type ?? null, battery_kwh ?? null);
 
+      const vehicleId = Number(result.lastInsertRowid);
+      if (apply_existing_data && vehicleCount.count === 0) {
+        db.prepare(`UPDATE charging_sessions SET vehicle_id = ? WHERE user_id = ? AND vehicle_id IS NULL`)
+          .run(vehicleId, authReq.user!.userId);
+        db.prepare(`UPDATE maintenance_log SET vehicle_id = ? WHERE user_id = ? AND vehicle_id IS NULL`)
+          .run(vehicleId, authReq.user!.userId);
+      }
+
+      return db.prepare(`SELECT * FROM vehicles WHERE id = ?`).get(vehicleId) as Vehicle;
+    });
+
+    const vehicle = createVehicle();
     res.status(201).json({ vehicle });
   } catch (err) {
     console.error('[vehicles POST]', err);
@@ -57,7 +71,7 @@ router.post('/', validate(createVehicleSchema), (req: Request, res: Response): v
 router.put('/:id', validate(updateVehicleSchema), (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const vehicleId = parseInt(req.params.id, 10);
+    const vehicleId = parseInt(String(req.params.id), 10);
 
     if (!Number.isInteger(vehicleId) || vehicleId <= 0) {
       res.status(400).json({ error: 'Invalid vehicle ID' });
@@ -106,7 +120,7 @@ router.put('/:id', validate(updateVehicleSchema), (req: Request, res: Response):
 router.delete('/:id', (req: Request, res: Response): void => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const vehicleId = parseInt(req.params.id, 10);
+    const vehicleId = parseInt(String(req.params.id), 10);
 
     if (!Number.isInteger(vehicleId) || vehicleId <= 0) {
       res.status(400).json({ error: 'Invalid vehicle ID' });

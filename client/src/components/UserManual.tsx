@@ -18,7 +18,7 @@ export default function UserManual({ onClose }: UserManualProps) {
         </div>
 
         <div className="overflow-y-auto px-6 py-4 text-sm text-gray-700 space-y-5">
-          <p className="text-xs text-gray-500">Leccy v1.1.1 · EV Cost Tracker</p>
+          <p className="text-xs text-gray-500">Leccy v1.6.2 · EV Cost Tracker</p>
 
           {/* ── Getting started ── */}
           <section>
@@ -52,6 +52,7 @@ export default function UserManual({ onClose }: UserManualProps) {
             <ul className="list-disc pl-5 space-y-1">
               <li>Enter your <strong>licence plate</strong> (spaces are stripped automatically).</li>
               <li>Optionally add a <strong>nickname</strong> (e.g. "Daily Driver") and the vehicle's <strong>battery capacity in kWh</strong>.</li>
+              <li>When adding your first vehicle, you can apply existing unlinked charging and maintenance data to it.</li>
               <li>You can register multiple vehicles and switch between them when logging sessions.</li>
               <li>To remove a vehicle, click <em>Remove</em> beside it. Any sessions linked to that vehicle are kept but will no longer show a vehicle name.</li>
             </ul>
@@ -59,37 +60,36 @@ export default function UserManual({ onClose }: UserManualProps) {
 
           {/* ── Logging sessions ── */}
           <section>
-            <h3 className="font-semibold text-green-700 mb-2">3. Logging a charging session</h3>
+            <h3 className="font-semibold text-green-700 mb-2">3. Logging charging sessions</h3>
             <p className="mb-1">
-              Go to <em>Data Entry</em> and fill in the <em>Charging Session</em> form:
+              Use <em>Quick Entry</em> for one charge at a time, or <em>Data Entry</em> when you
+              want to paste several sessions from CSV.
             </p>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong>Vehicle:</strong> select the vehicle you charged (or leave blank for "any").</li>
-              <li><strong>Date unplugged:</strong> the date you finished charging.</li>
-              <li><strong>Odometer (miles):</strong> current mileage at the time of unplugging.</li>
-              <li><strong>Battery % before / after:</strong> the state of charge before you plugged in and after you unplugged.</li>
-              <li><strong>Range before / after (miles):</strong> the estimated range shown on the dashboard before and after charging.</li>
-              <li><strong>Air temperature (°C):</strong> the ambient temperature — this helps analyse how temperature affects range.</li>
+              <li><strong>Quick Entry:</strong> save charge-start odometer, battery percentage, and displayed range, then finish the session after unplugging.</li>
+              <li><strong>Charge reminders:</strong> when Leccy is installed as a PWA and push notifications are enabled, a saved Quick Entry charge start can trigger a daily reminder until you submit or clear it.</li>
+              <li><strong>Quick Entry sense checks:</strong> Leccy highlights impossible end-charge SOC, range, temperature, and date combinations before estimating kWh or submitting.</li>
+              <li><strong>CSV Data Entry:</strong> paste rows in the format <code>odo,init%,initRng,Final%,FinalRng,AirTemp,dd/mm/yyyy</code>.</li>
+              <li><strong>Test before submit:</strong> the <em>Test</em> button validates rows, highlights errors, and shows basic statistics before import.</li>
+              <li><strong>Imported sessions:</strong> CSV imports create charging sessions only. Charge type, kWh, and cost are left blank so you can enter the measured charger data yourself.</li>
             </ul>
-            <p className="mt-2">
-              After saving the session you can optionally log the <strong>charger cost</strong> for
-              that session (see section 4).
-            </p>
           </section>
 
           {/* ── Charger costs ── */}
           <section>
             <h3 className="font-semibold text-green-700 mb-2">4. Logging charger costs</h3>
             <p className="mb-1">
-              In <em>Data Entry</em>, under <em>Charger Cost</em>, link a cost record to an existing
-              session:
+              In <em>Data Entry</em>, use the charging sessions table to add or update kWh and
+              cost data for each session:
             </p>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong>Session:</strong> pick the session this cost belongs to.</li>
-              <li><strong>Energy (kWh):</strong> how many kilowatt-hours were added.</li>
+              <li><strong>Charge type:</strong> choose <em>Home</em> or <em>Away</em> when you know where the session happened.</li>
+              <li><strong>Energy (kWh):</strong> enter the charger-reported energy whenever possible.</li>
               <li><strong>Cost (pence):</strong> the total amount paid in pence (e.g. 1200 = £12.00).</li>
-              <li><strong>Charger type:</strong> <em>Home</em> or <em>Public</em>.</li>
-              <li><strong>Charger name</strong> (optional): e.g. "Pod Point driveway" or "Osprey A1 services".</li>
+              <li><strong>Estimate kWh:</strong> this optional button estimates blank kWh entries from SOC gained × vehicle battery size while leaving existing kWh values unchanged.</li>
+              <li><strong>Measured vs estimated:</strong> Leccy records whether kWh came from the charger or from an estimate, and uses that in analytics and data-quality checks.</li>
+              <li><strong>Autosave and revert:</strong> Charging Sessions table edits save automatically. The latest edited row can be reverted until you edit another row.</li>
+              <li><strong>Delete with undo:</strong> deleting a session greys the row and offers Revert while it remains the latest changed row.</li>
             </ul>
           </section>
 
@@ -109,6 +109,7 @@ export default function UserManual({ onClose }: UserManualProps) {
               <li><strong>Effective from:</strong> the date this tariff started.</li>
             </ul>
             <p className="mt-2">You can store multiple tariffs with different effective dates to track rate changes over time.</p>
+            <p className="mt-2">When Data Entry auto-enumerates home costs, it uses the tariff active on each session date.</p>
           </section>
 
           {/* ── Maintenance ── */}
@@ -130,28 +131,45 @@ export default function UserManual({ onClose }: UserManualProps) {
             <ul className="list-disc pl-5 space-y-1">
               <li><strong>Total cost &amp; cost per mile:</strong> overall spend and efficiency.</li>
               <li><strong>Total kWh &amp; miles driven:</strong> aggregate usage figures.</li>
-              <li><strong>Cost per session:</strong> bar chart of charging costs over time.</li>
-              <li><strong>Battery efficiency:</strong> how much range you get per charge.</li>
+              <li><strong>Costs and kWh per session:</strong> separate charts with All, Home, and Away filters.</li>
+              <li><strong>Battery efficiency:</strong> kWh per mile, with points more than two standard deviations from the mean excluded.</li>
               <li><strong>Temperature vs range:</strong> shows how cold weather affects your EV's range.</li>
               <li><strong>Miles per % battery:</strong> tracks how many miles you get from each percentage point of charge.</li>
             </ul>
-            <p className="mt-2 mb-1 font-semibold text-green-700">Advanced Insight Charts (v1.1.1)</p>
+            <p className="mt-2 mb-1 font-semibold text-green-700">Advanced analytics</p>
             <ul className="list-disc pl-5 space-y-1">
               <li>
-                <strong>Battery Health Proxy:</strong> plots your car's projected full-charge range
-                against odometer reading. A falling trendline indicates real-world battery degradation
-                over time.
+                <strong>Ownership Intelligence:</strong> compares your EV spend with a typical petrol-car
+                cost over the same odometer miles, including estimated savings and percentage saved.
               </li>
               <li>
-                <strong>Thermal Impact on Charging:</strong> scatter chart showing how outside
-                temperature affects how much energy is added per session. Point opacity reflects
-                your starting battery level.
+                <strong>Odometer-Based Efficiency:</strong> uses odometer differences between charges as
+                the measured distance travelled between sessions.
+              </li>
+              <li>
+                <strong>Temperature-Normalised Efficiency:</strong> groups kWh-per-mile performance by
+                ambient temperature band so cold-weather effects are easier to see.
+              </li>
+              <li>
+                <strong>Measured-kWh Usable Capacity Proxy:</strong> compares charger-recorded kWh with
+                SOC gained. This is a proxy, not a lab battery-health test, and is strongest when kWh is
+                recorded from the charger rather than estimated.
+              </li>
+              <li>
+                <strong>Home vs Away Economics:</strong> separates charging cost, kWh, and cost-per-mile
+                behaviour by charge type.
+              </li>
+              <li>
+                <strong>Data Quality:</strong> shows how much of your dataset has odometer continuity,
+                measured kWh, temperatures, vehicle links, and charge-type labels.
               </li>
               <li>
                 <strong>GOM Accuracy:</strong> compares the car's estimated range consumed against
                 the actual miles you drove. Points above the diagonal line mean the car
                 under-estimated; points below mean it over-estimated. The accuracy ratio is shown as
-                a summary badge above the chart.
+                a summary badge above the chart. Extreme outliers are removed from the displayed
+                scatter using a robust modified z-score limit so one unusual trip does not dominate
+                the graph.
               </li>
               <li>
                 <strong>Range Anxiety Gauge:</strong> histogram of how full your battery is when you
@@ -167,6 +185,7 @@ export default function UserManual({ onClose }: UserManualProps) {
             <p className="mt-2">
               Use the <strong>date range filter</strong> at the top of the page to focus on a
               specific period, and the <strong>vehicle filter</strong> to view data for a single car.
+              If tariff or vehicle setup is missing, Analytics links you directly to the relevant setup page.
             </p>
           </section>
 
@@ -177,13 +196,24 @@ export default function UserManual({ onClose }: UserManualProps) {
               <li><strong>Change password:</strong> enter your current password, then your new password (min 8 chars + 1 special character), and confirm it.</li>
               <li><strong>Enable 2FA:</strong> click <em>Enable 2FA</em>, confirm your email address, then enter the 6-digit code sent to you.</li>
               <li><strong>Disable 2FA:</strong> enter your password to turn off two-factor authentication.</li>
+              <li><strong>Charge Reminder Notifications:</strong> enable or disable PWA push reminders and choose the daily reminder time. The default is 07:30.</li>
               <li><strong>My Vehicles:</strong> add or remove vehicles associated with your account.</li>
+            </ul>
+          </section>
+
+          {/* ── Admin panel ── */}
+          <section>
+            <h3 className="font-semibold text-green-700 mb-2">9. Admin panel</h3>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><strong>User Management:</strong> administrators can create and remove users.</li>
+              <li><strong>SMTP Settings:</strong> configure outgoing email used for magic links and two-factor codes.</li>
+              <li><strong>Web Push (VAPID):</strong> configure PWA push notification keys, generate a new key pair, and check whether the private key is configured.</li>
             </ul>
           </section>
 
           {/* ── Data &amp; privacy ── */}
           <section>
-            <h3 className="font-semibold text-green-700 mb-2">9. Your data &amp; privacy</h3>
+            <h3 className="font-semibold text-green-700 mb-2">10. Your data &amp; privacy</h3>
             <ul className="list-disc pl-5 space-y-1">
               <li>
                 <strong>All data is stored on the server</strong> that hosts this application — no
@@ -212,7 +242,7 @@ export default function UserManual({ onClose }: UserManualProps) {
 
           {/* ── Tips ── */}
           <section>
-            <h3 className="font-semibold text-green-700 mb-2">10. Tips &amp; troubleshooting</h3>
+            <h3 className="font-semibold text-green-700 mb-2">11. Tips &amp; troubleshooting</h3>
             <ul className="list-disc pl-5 space-y-1">
               <li>If you are locked out after too many failed login attempts, wait 15 minutes or use a <em>Magic Link</em> to sign in without a password.</li>
               <li>Magic links expire after 15 minutes and can only be used once.</li>

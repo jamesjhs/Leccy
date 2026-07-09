@@ -1,7 +1,7 @@
 {
-  "name": "Leccy – EV Cost Tracker",
+  "name": "Leccy - EV Charging Cost Tracker",
   "short_name": "Leccy",
-  "description": "Log and analyse the cost of charging your electric vehicle.",
+  "description": "Track EV charging sessions, home and public charging costs, smart tariffs, vehicle efficiency, maintenance, and cost per mile.",
   "start_url": "/quick-data-entry",
   "display": "standalone",
   "orientation": "any",

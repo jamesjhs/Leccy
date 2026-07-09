@@ -17,6 +17,9 @@ import tariffRoutes from './routes/tariff';
 import analyticsRoutes from './routes/analytics';
 import adminRoutes from './routes/admin';
 import vehiclesRoutes from './routes/vehicles';
+import publicRoutes from './routes/public';
+import pushRoutes from './routes/push';
+import { startChargeReminderScheduler } from './services/chargeReminderScheduler';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '2030', 10);
@@ -60,7 +63,7 @@ app.use(
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind uses inline styles
         imgSrc: ["'self'", 'data:'],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", 'https://*.push.apple.com', 'https://*.push.services.mozilla.com', 'https://*.googleapis.com', 'https://*.gvt1.com'],
         fontSrc: ["'self'"],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
@@ -74,7 +77,7 @@ app.use(
       includeSubDomains: true,
     },
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-    crossOriginEmbedderPolicy: false, // avoid breaking Recharts SVGs
+    crossOriginEmbedderPolicy: false, // avoid breaking chart SVGs
   })
 );
 
@@ -124,6 +127,7 @@ app.get('/readyz', (_req, res) => {
 });
 
 // ─── API routes ────────────────────────────────────────────────────────────────
+app.use('/api/public', apiLimiter, publicRoutes);
 app.use('/api/auth', apiLimiter, authRoutes);
 app.use('/api/sessions', apiLimiter, sessionsRoutes);
 app.use('/api/charger', apiLimiter, chargerRoutes);
@@ -132,18 +136,33 @@ app.use('/api/tariff', apiLimiter, tariffRoutes);
 app.use('/api/analytics', apiLimiter, analyticsRoutes);
 app.use('/api/admin', apiLimiter, adminRoutes);
 app.use('/api/vehicles', apiLimiter, vehiclesRoutes);
+app.use('/api/push', apiLimiter, pushRoutes);
 
 // ─── Serve frontend in production ─────────────────────────────────────────────
 if (IS_PROD) {
   const clientDist = path.resolve(__dirname, '../../client/dist');
+  app.get('/sw.js', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.sendFile(path.join(clientDist, 'sw.js'));
+  });
+  app.get('/manifest.json', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(clientDist, 'manifest.json'));
+  });
   app.use(express.static(clientDist));
-  app.get('*', apiLimiter, (_req, res) => {
+  app.use(apiLimiter, (req, res, next) => {
+    if (req.method !== 'GET' || req.path.startsWith('/api/')) {
+      next();
+      return;
+    }
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }
 
 app.listen(PORT, () => {
   console.log(`[server] Leccy running on port ${PORT} (${process.env.NODE_ENV || 'development'})`);
+  startChargeReminderScheduler();
 });
 
 export default app;

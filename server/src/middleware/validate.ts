@@ -6,12 +6,16 @@
  *  1. Parses the request body / query with the schema
  *  2. Strips any unknown keys (preventing mass-assignment and oversized payloads)
  *  3. Applies any transforms defined in the schema (e.g. .trim(), .toUpperCase())
- *  4. Replaces req.body / req.query with the cleaned, typed data
+ *  4. Replaces req.body or stores cleaned query data on req.validatedQuery
  *  5. Returns 400 with field-level messages on failure
  */
 
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+
+export interface ValidatedQueryRequest<T> extends Request {
+  validatedQuery?: T;
+}
 
 /* -------------------------------------------------------------------------
  * Middleware factories
@@ -21,7 +25,7 @@ export function validate<T>(schema: z.ZodSchema<T>) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req.body);
     if (!result.success) {
-      const details = result.error.errors.map(
+      const details = result.error.issues.map(
         (e) => `${e.path.join('.') || 'body'}: ${e.message}`
       );
       res.status(400).json({ error: 'Validation failed', details });
@@ -33,17 +37,16 @@ export function validate<T>(schema: z.ZodSchema<T>) {
 }
 
 export function validateQuery<T>(schema: z.ZodSchema<T>) {
-  return (req: Request, res: Response, next: NextFunction): void => {
+  return (req: ValidatedQueryRequest<T>, res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req.query);
     if (!result.success) {
-      const details = result.error.errors.map(
+      const details = result.error.issues.map(
         (e) => `${e.path.join('.') || 'query'}: ${e.message}`
       );
       res.status(400).json({ error: 'Validation failed', details });
       return;
     }
-    // Cast is safe — query params overwritten with sanitised values
-    (req as Request & { query: unknown }).query = result.data as Record<string, string>;
+    req.validatedQuery = result.data;
     next();
   };
 }
@@ -66,11 +69,11 @@ const pence = (maxPounds = 100_000) =>
 
 /** Finite non-negative real */
 const nnReal = (max: number) =>
-  z.number({ invalid_type_error: 'Must be a number' }).finite().nonnegative().max(max);
+  z.number().finite('Must be a number').nonnegative().max(max);
 
 /** Percentage 0–100 */
 const percentage = z
-  .number({ invalid_type_error: 'Must be a number' })
+  .number()
   .finite()
   .min(0)
   .max(100);
@@ -149,7 +152,7 @@ export const sessionSchema = z.object({
   final_battery_pct: percentage,
   final_range_miles: nnReal(1_000),
   air_temp_celsius: z
-    .number({ invalid_type_error: 'Must be a number' })
+    .number()
     .finite()
     .min(-60, 'Temperature below -60 °C is outside expected range')
     .max(60, 'Temperature above 60 °C is outside expected range'),
@@ -164,12 +167,14 @@ export const sessionUpdateSchema = sessionSchema.partial();
 export const chargerCostSchema = z.object({
   session_id: z.number().int().positive(),
   energy_kwh: z
-    .number({ invalid_type_error: 'Must be a number' })
+    .number()
     .finite()
     .positive('Must be greater than zero')
     .max(200, 'Energy exceeds expected maximum'),
   price_pence: pence(10_000),
+  price_calculated: z.boolean().optional().default(false),
   charger_type: z.enum(['home', 'public']),
+  energy_source: z.enum(['measured', 'estimated']).optional().default('measured'),
   charger_name: z
     .string()
     .max(100)
@@ -180,13 +185,15 @@ export const chargerCostSchema = z.object({
 /** PUT /charger/:id */
 export const chargerCostUpdateSchema = z.object({
   energy_kwh: z
-    .number({ invalid_type_error: 'Must be a number' })
+    .number()
     .finite()
     .positive('Must be greater than zero')
     .max(200, 'Energy exceeds expected maximum')
     .optional(),
   price_pence: pence(10_000).optional(),
+  price_calculated: z.boolean().optional(),
   charger_type: z.enum(['home', 'public']).optional(),
+  energy_source: z.enum(['measured', 'estimated']).optional(),
 });
 
 /** POST /maintenance */
@@ -269,6 +276,7 @@ export const createVehicleSchema = z.object({
   nickname: z.string().max(100).transform((s) => s.trim()).optional(),
   vehicle_type: z.string().max(100).transform((s) => s.trim()).optional(),
   battery_kwh: nnReal(500).optional().nullable(),
+  apply_existing_data: z.boolean().optional().default(false),
 });
 
 /** PUT /vehicles/:id */

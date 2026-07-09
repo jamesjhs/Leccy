@@ -80,6 +80,7 @@ export default function ChargerCosts() {
         session_id: Number(data.session_id),
         energy_kwh: Number(data.energy_kwh),
         price_pence: Math.round(Number(data.price_pounds) * 100),
+        price_calculated: data.charger_type === 'home' && activeTariff !== null,
         charger_type: data.charger_type,
         charger_name: data.charger_type === 'public' ? data.charger_name : undefined,
       };

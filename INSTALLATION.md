@@ -1,4 +1,4 @@
-# Leccy — EV Cost Tracker v1.3.0: Installation Guide
+# Leccy — EV Cost Tracker v1.6.2: Installation Guide
 
 ## Prerequisites
 
@@ -44,6 +44,9 @@ nano .env
 | `SMTP_USER` | SMTP username / email address |
 | `SMTP_PASS` | SMTP password |
 | `SMTP_FROM` | Sender address for outgoing emails |
+| `VAPID_PUBLIC_KEY` | Optional seed public VAPID key for PWA push notifications |
+| `VAPID_PRIVATE_KEY` | Optional seed private VAPID key for PWA push notifications |
+| `VAPID_SUBJECT` | Optional seed contact URI for VAPID, usually `mailto:admin@example.com` |
 | `CAR_BATTERY_KWH` | Your EV battery capacity in kWh |
 | `CAR_IDEAL_RANGE_MILES` | Manufacturer-rated range in miles |
 | `DOMAIN` | Public domain URL (for production) |
@@ -52,6 +55,16 @@ nano .env
 > ```bash
 > node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 > ```
+
+Generate VAPID keys for PWA push reminders from the `server` directory:
+
+```bash
+cd server
+npx web-push generate-vapid-keys
+cd ..
+```
+
+Copy the generated public/private keys into `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`, or sign in as an administrator and configure them from **Admin Panel → Web Push (VAPID)**. Settings saved in the Admin Panel take precedence over `.env`. Without these keys Leccy still runs, but charge reminder push notifications remain disabled.
 
 ---
 
@@ -77,25 +90,13 @@ cd ..
 
 ## 4. Build for production
 
-### Build the frontend
+From the repository root:
 
 ```bash
-cd client
 npm run build
-cd ..
 ```
 
-Built static files will be placed in `client/dist/`.
-
-### Build the backend
-
-```bash
-cd server
-npm run build
-cd ..
-```
-
-Compiled output will be in `server/dist/`.
+This builds both the frontend and backend. Built static files are placed in `client/dist/`; compiled backend output is placed in `server/dist/`.
 
 ---
 
@@ -129,6 +130,14 @@ pm2 start ecosystem.config.js
 ```
 
 This starts Leccy in production mode using the compiled `server/dist/index.js`.
+
+For local production smoke testing from the repository root, run:
+
+```bash
+npm start
+```
+
+This starts the compiled API server and Vite preview server together. Run `npm run build` first.
 
 ### Verify it is running
 
@@ -300,12 +309,14 @@ curl https://leccy.jahosi.co.uk/api/auth/version
 
 ## 11. Installing as a mobile app (PWA)
 
-Leccy v1.1.1 is a fully-featured **Progressive Web App**. Once deployed behind HTTPS, users can install it directly from their mobile browser with no app store required.
+Leccy v1.6.2 is a fully-featured **Progressive Web App**. Once deployed behind HTTPS, supported browsers show an in-app install prompt on first load. Users can also install it directly from their browser menu with no app store required.
+
+When VAPID keys are configured through `.env` or **Admin Panel → Web Push (VAPID)**, installed PWA users are prompted to enable push notifications on first PWA launch. If a Quick Entry charge start is saved and not yet submitted or cleared, Leccy sends a daily reminder at the user's configured reminder time, defaulting to **07:30**. Users can enable or disable these reminders and change the reminder time from **Account Settings**.
 
 ### Android (Chrome)
 
 1. Open the site in **Chrome** on Android.
-2. Tap the browser menu (⋮) and choose **Add to Home screen**.
+2. Use the in-app install prompt if it appears, or tap the browser menu (⋮) and choose **Add to Home screen**.
 3. Confirm the name and tap **Add**.
 
 The app will appear on the home screen and launch full-screen without any browser chrome.
@@ -320,4 +331,8 @@ The app will appear on the home screen and launch full-screen without any browse
 The app will appear on the home screen and launch in standalone mode.
 
 > **Note:** iOS requires HTTPS for PWA installation. Ensure Cloudflare's proxy (orange cloud) is active and SSL/TLS mode is set to **Full** or **Full (strict)**.
+
+### PWA updates
+
+The service worker cache is versioned with the app version. On load, installed PWAs check for a newer service worker without using the HTTP cache, activate it immediately when found, purge old caches, and reload the app once the new version controls the page. Navigation and static assets use a network-first strategy while online so local PWA files are refreshed from the latest server version after a version increment, with cached fallbacks kept for offline use.
 

@@ -17,7 +17,7 @@
     "helmet": "^8.2.0",
     "hpp": "^0.2.3",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^9.0.1",
+    "nodemailer": "^9.1.1",
     "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
